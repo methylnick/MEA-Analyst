@@ -76,25 +76,39 @@ ui <- dashboardPage(
                         ),
                         box(
                             title = "Formatting and Filtering",
-                            checkboxInput('rm.inactive', 'Remove inactive channels - Test', FALSE),
-                            sliderInput(inputId = "sp.level",
-                                        label = "Minimum Spike Rate Threshold (Hz) - Test :",
-                                        min = 0,
-                                        max = 10,
-                                        value = 1),
-                            checkboxInput('rm.inactive.base', 'Remove inactive channels - Baseline', FALSE),
-                            sliderInput(inputId = "sp.level.baseline",
-                                        label = "Minimum Spike Rate Threshold (Hz) - Baseline :",
-                                        min = 0,
-                                        max = 10,
-                                        value = 1),
-                            actionButton("choice", "Click To Import Data")
+                            checkboxInput(
+                                'rm.inactive',
+                                'Remove inactive channels - Test', 
+                                FALSE
+                            ),
+                            sliderInput(
+                                inputId = "sp.level",
+                                label = "Minimum Spike Rate Threshold (Hz) - Test :",
+                                min = 0,
+                                max = 10,
+                                value = 1
+                            ),
+                            checkboxInput(
+                                'rm.inactive.base', 
+                                'Remove inactive channels - Baseline', 
+                                FALSE
+                            ),
+                            sliderInput(
+                                inputId = "sp.level.baseline",
+                                label = "Minimum Spike Rate Threshold (Hz) - Baseline :",
+                                min = 0,
+                                max = 10,
+                                value = 1
+                            ),
+                            actionButton(
+                                "choice", 
+                                "Click To Import Data"
+                            )
                         )
                     )
                 ),
                 tabItem(
                     tabName = "loadedTables",
-                    title = "Tables Loaded and Ready to Plot",
                     fluidRow(
                         h3("Test - MEA file"), 
                         DTOutput("table_display")
@@ -106,7 +120,6 @@ ui <- dashboardPage(
                 ),
                 tabItem(
                     tabName = "spikeTables",
-                    title = "Spike Data Tables Loaded",
                     fluidRow(
                         h3("Test Spike Data"), 
                         DTOutput("sp_test_out")
