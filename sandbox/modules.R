@@ -84,7 +84,7 @@ extractScatter_server <- function(id, dat){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
     output$sampOrder <- renderUI({
-      data_available <- dat() %>% 
+      data_available <- dat %>% 
         select(`Compound ID`) %>% 
         pull()
       
@@ -92,14 +92,14 @@ extractScatter_server <- function(id, dat){
       
       data_available <- factor(data_available,levels = data_levels)
       
-      selectizeInput(inputId = ns("sampleOrderSelect"),
+      selectizeInput(inputId = ns("sampleOrder"),
                      label = "Group Select / Order :", 
                      choices = data_available,
                      multiple = T, 
                      selected = NULL)
     })
     output$doseLabel <- renderUI({
-      data_available <- dat() %>% 
+      data_available <- dat %>% 
         select(`Dose Label`) %>% 
         distinct() %>% 
         pull()
@@ -112,18 +112,14 @@ extractScatter_server <- function(id, dat){
                   multiple = F, 
                   selected = NULL)
     })
-    
     return(list(
+      sampleOrder = reactive({
+        validate(need(input$sampleOrder, FALSE))
+        input$sampleOrder}),
       doseLabelSelect = reactive({
         validate(need(input$doseLabelSelect, FALSE))
-        input$doseLabelSelect
-      }),
-      sampleOrderSelect = reactive({
-        validate(need(input$sampleOrderSelect, FALSE))
-        input$sampleOrderSelect
-      })
-    )
-    )
+        input$doseLabelSelect})
+    ))
   })
 }
 
