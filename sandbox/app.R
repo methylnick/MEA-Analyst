@@ -20,6 +20,7 @@ library(shinydashboard)
 library(colourpicker)
 
 source("modules.R")
+source("helperFunctions.R")
 
 data <- read_csv("3659_TOP and TIAG_Drug 2_190321.csv")
 

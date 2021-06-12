@@ -69,9 +69,10 @@ extractMeasurementColumns_server <- function(id, dat){
 extractScatter_UI <- function(id) {
   ns <- NS(id)
   tagList(
-    fluidRow(
+    fluidRow(box(
       uiOutput(ns("sampOrder")),
       uiOutput(ns("doseLabel"))
+    )
     )
   )
 }
@@ -84,7 +85,7 @@ extractScatter_server <- function(id, dat){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
     output$sampOrder <- renderUI({
-      data_available <- dat() %>% 
+      data_available <- dat %>% 
         select(`Compound ID`) %>% 
         pull()
       
@@ -99,7 +100,7 @@ extractScatter_server <- function(id, dat){
                      selected = NULL)
     })
     output$doseLabel <- renderUI({
-      data_available <- dat() %>% 
+      data_available <- dat %>% 
         select(`Dose Label`) %>% 
         distinct() %>% 
         pull()

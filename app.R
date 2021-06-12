@@ -16,6 +16,7 @@ library(colourpicker)
 
 # Source Modules here
 source("modules.R")
+source("helperFunctions.R")
 
 # Define UI for application that draws a histogram
 ui <- dashboardPage(
@@ -39,6 +40,21 @@ ui <- dashboardPage(
                 menuSubItem(
                     "Preview Spike Calculated Table", tabName = "spikeTablesMean", icon = icon("table")
                 ) 
+            ),
+            menuItem(
+                "Plots - By Channel", tabName = "plots", icon = icon("chart-bar"),
+                menuSubItem(
+                    "Histogram Plots", tabName = "plots", icon = icon("chart-bar")
+                ),
+                menuSubItem(
+                    "Scatter Plots", tabName = "scatPlots", icon = icon("braille")
+                ),
+                menuSubItem(
+                    "PCA Plots", tabName = "pcaPlots", icon = icon("blackberry")
+                ),
+                menuSubItem(
+                    "Epilepiform Plots (PCA)", tabName = "epiPlots", icon = icon("user")
+                )
             )
         )
     ),
@@ -93,8 +109,62 @@ ui <- dashboardPage(
             tabItem(tabName = "spikeTablesMean",
                     title = "Calculated Means from Spike Data",
                     fluidRow(h3("Summarised Spike Table"), displayDT_ui("s.table")),
-                    fluidRow(h3("Scatter Table"), DTOutput("scatTable")),
-                    fluidRow(h3("Well Means Table"), DTOutput("wellScatTable"))
+                    fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
+                    fluidRow(h3("Selected Table from Scatter Interface"), displayDT_ui("u.table"))
+            ),
+            tabItem(tabName = "plots",
+                    title = "Histogram Plots",
+                    fluidRow(box(title = "Histogram Options",
+                                 extractMeasurementColumns_UI("histCols"),
+                                 sliderInput(inputId = "bins",
+                                             label = "Histogram - No# of bins :",
+                                             min = 1,
+                                             max = 50,
+                                             value = 30)),
+                             box(plotOutput(outputId = "distPlot"))),
+                    fluidRow(box(plotOutput(outputId = "distPlot2")),
+                             box(plotOutput(outputId = "distPlot3"))
+                    )
+            ),
+            tabItem(tabName = "scatPlots",
+                    outputId = "scatter_box_text",
+                    fluidRow(box(title = "Scatter Plot Configuration",
+                                 extractScatter_UI("channelScatter"),
+                                 extractMeasurementColumns_UI("colsScatter"),
+                                 actionButton("plotScatter", "Select Groups and Plot")
+                    ),
+                    box(title = "Tweaks to the Charts",
+                        sliderInput(inputId = "point.size",step = 0.5,
+                                    label = "Point Size :",
+                                    min = 0,
+                                    max = 8,
+                                    value = 3),
+                        sliderInput(inputId = "box.width",step = 0.05,
+                                    label = "Box Width :",
+                                    min = 0.05,
+                                    max = 0.8,
+                                    value = 0.5),
+                        sliderInput(inputId = "ylim.rel",step = 100,
+                                    label = "y limit %Rel :",
+                                    min = 200,
+                                    max = 2000,
+                                    value = 800),
+                        sliderInput(inputId = "text.size",step = 1,
+                                    label = "Text Size :",
+                                    min = 0,
+                                    max = 30,
+                                    value = 6),
+                        downloadButton("downloadData", "Download Normalised Data")
+                    )
+                    
+                    ),
+                    fluidRow(box(title = " - Raw Data", plotlyOutput(outputId = "scatter_box")),
+                             box(title = " - Relative to Baseline ( % ) - 'jitter'", plotlyOutput(outputId = "scatter_box_rel"))
+                    ),
+                    fluidRow(box(title =" - Relative to Baseline ( % ) - 'beeswarm'", plotlyOutput(outputId = "swarm_box_rel")),
+                             box(displayDT_ui("n.u.table"))
+                    )
+                    
             )
         )
     )
@@ -240,19 +310,6 @@ server <- function(input, output, session) {
         scatter.test <- scatter.test %>% 
             dplyr::select(`Channel ID`:`Dose Label`, plate:key3, `Spike Count`:`Mean Network Interburst Interval [µs]`,
                           mean_maxAmp_pV:var_peakToPeak_pV)
-        
-        vars2 <- names(scatter.test)
-        vars3 <- names(scatter.test)
-        updateSelectInput(session, "measurement","Select Measurement Column (y)", choices = vars2, selected = "Burst Count")
-        updateSelectInput(session, "measurement2","Select Measurement Column (y)", choices = vars2, selected = "Burst Count")
-        updateSelectInput(session, "sampleid","Select Group Column (x)", choices = vars3, selected = "Compound ID")
-        updateSelectInput(session, "sampleid2","Select Group of Interest", choices = vars3, selected = "Compound ID")
-        updateSelectInput(session, "sampleid3","Select Group Column (x)", choices = vars3, selected = "Compound ID")
-        updateSelectInput(session, "sampleid4","Select Group of Interest", choices = vars3, selected = "Compound ID")
-        
-        scatter.test
-        
-        
     })
     
     ##############################################################################
@@ -272,18 +329,7 @@ server <- function(input, output, session) {
         dat
     })
     
-    ##############################################################################
-    # With the uber dataset, now create the data structure for plotting of the 
-    # scatter and PCA's after filtering
-    uber.table <- eventReactive(input$plotScatter, {
-        scatter.test <- scat.table()
-        
-        scatter.test <- scatter.test %>% 
-            filter(`Dose Label` %in% input$dose.label.select) %>% 
-            filter(!!rlang::sym(input$sampleid) %in% input$sample.order) %>% 
-            mutate(!!rlang::sym(input$sampleid) := factor(!!rlang::sym(input$sampleid), levels = input$sample.order))
-    })
-    
+   
     ##############################################################################
     # With the uber dataset, now create the data structure for plotting of the 
     # scatter and PCA's after filtering
@@ -304,7 +350,151 @@ server <- function(input, output, session) {
     displayDT_server(id ="s.base", dat = sp.base())
     displayDT_server(id ="s.test", dat = sp.test())
     displayDT_server(id ="s.table", dat = spike.table())
+    displayDT_server(id ="u.table", dat = uber.table())
+    displayDT_server(id ="sc.table", dat = scat.table())
+    displayDT_server(id ="n.u.table", dat = norm.uber.table())
 
+    ############################################################################## 
+    # Lets try and modularise measurement column extraction for selection in 
+    # graphs then extract out the value for plotting
+    hcols <- extractMeasurementColumns_server(id = "histCols", dat = scat.table())
+    
+    
+    ##############################################################################
+    output$distPlot <- renderPlot({
+        f <- scat.table()
+        f %>% 
+            select(!!rlang::sym(hcols())) %>% 
+            drop_na() %>% 
+            ggplot(aes(x = !!rlang::sym(hcols()))) +
+            geom_histogram(bins = input$bins) +
+            ggtitle(paste0("Histogram - ",hcols())) +
+            theme(axis.title.x = element_blank())
+    })
+    
+    ##############################################################################
+    output$distPlot2 <- renderPlot({
+        f <- scat.table()
+        f %>% 
+            select(!!rlang::sym(hcols()), `Dose Label`) %>% 
+            drop_na() %>% 
+            ggplot(aes(x = !!rlang::sym(hcols()), colour = `Dose Label`)) +
+            geom_histogram(bins = input$bins, fill = "white", position = "dodge") +
+            ggtitle(paste0("Histogram - ",hcols())) +
+            theme(axis.title.x = element_blank())
+    })
+    
+    ##############################################################################
+    output$distPlot3 <- renderPlot({
+        f <- scat.table()
+        f %>% 
+            select(!!rlang::sym(hcols()), `Compound ID`) %>% 
+            drop_na() %>% 
+            ggplot(aes(x = !!rlang::sym(hcols()), colour = `Compound ID`)) +
+            geom_histogram(bins = input$bins, fill = "white", position = "dodge") +
+            ggtitle(paste0("Histogram - ",hcols())) +
+            theme(axis.title.x = element_blank())  
+    })
+    
+    ############################################################################## 
+    # Modularise selection columns extraction for 
+    # graphs then extract out the value for plotting
+    scatterChannel <- extractScatter_server(id = "channelScatter", dat = scat.table())
+    scatterCols <- extractMeasurementColumns_server(id = "colsScatter", dat = scat.table())
+    
+    ##############################################################################
+    # With the uber dataset, now create the data structure for plotting of the 
+    # scatter and PCA's after filtering
+    uber.table <- eventReactive(input$plotScatter, {
+        
+        scatter.test <- scat.table() %>% 
+            dplyr::filter(`Dose Label` == scatterChannel$doseLabelSelect()) %>% 
+            dplyr::filter(`Compound ID` %in% scatterChannel$sampleOrder()) %>% 
+            mutate(`Compound ID` := factor(`Compound ID`, levels = scatterChannel$sampleOrder()))
+        
+        return(scatter.test)
+    })
+    
+    
+    ##############################################################################
+    # Create a plotly scatter object by channel
+    output$scatter_box <- renderPlotly({
+        ggplotly(
+            uber.table() %>% 
+                ggplot(aes(y = !!rlang::sym(scatterCols()), 
+                           x = `Compound ID`,
+                           col= `Compound ID`,
+                           label = `Channel ID`,
+                           label2 = `Channel Label`,
+                           label3 = `Well ID`,
+                           label4 = plate)) +
+                geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
+                geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
+                geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                theme_classic() +
+                labs(y=input$measurement) +
+                theme(
+                    axis.text = element_text(size = input$text.size,face = "bold"),
+                    axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                    axis.title.x = element_blank(),
+                    legend.position = "none"
+                )
+        )
+    })
+    
+    ##############################################################################
+    # Create a normalised table of measurements from the uber table that has been
+    # selected and filtered for the variables of interest. Calculate the normalised
+    # values for all measures and columns of interest. 
+    # 
+    norm.uber.table <- eventReactive(input$plotScatter, {
+        scatter.test <- scat.table()
+        
+        ctrl <- scatter.test %>% 
+            filter(`Dose Label` == "Control")
+        
+        scatter.test <- left_join(ctrl, scatter.test, by = "key")
+        
+        colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
+        
+        scatter.test <- scatter.test %>% 
+            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        
+        scatter.test <- scatter.test %>% 
+            dplyr::filter(`Dose Label` == scatterChannel$doseLabelSelect()) %>% 
+            dplyr::filter(`Compound ID` %in% scatterChannel$sampleOrder()) %>% 
+            mutate(`Compound ID` := factor(`Compound ID`, levels = scatterChannel$sampleOrder()))
+        
+    })
+    
+    ##############################################################################
+    # This normalises the measurement values to the baseline data table does a merge 
+    # on channel ID
+    output$scatter_box_rel <- renderPlotly({
+        ggplotly(
+            norm.uber.table() %>% 
+                ggplot(aes(y = !!rlang::sym(scatterCols()), 
+                           x = `Compound ID`,
+                           col = `Compound ID`,
+                           label = `Channel ID`,
+                           label2 = `Channel Label`,
+                           label3 = `Well ID`,
+                           label4 = plate)) +
+                geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
+                geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
+                geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                theme_classic() +
+                labs(y=paste0(input$measurement,"\n% Relative to Baseline\n")) +
+                theme(axis.text = element_text(size = input$text.size,face = "bold"),
+                      axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                      axis.title.x = element_blank(),
+                      legend.position = "none") +
+                coord_cartesian(ylim=c(0,input$ylim.rel))
+        )
+    })
+    
     
 }
 
