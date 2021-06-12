@@ -60,6 +60,18 @@ ui <- dashboardPage(
                      menuSubItem(
                          "Plotting Statsticial Significance", tabName = "stats", icon = icon("ruler")
                      )
+            ),
+            menuItem(
+                "Plots - By Well", tabName = "Wplots", icon = icon("chart-bar"),
+                menuSubItem(
+                    "Scatter Plots", tabName = "WscatPlots", icon = icon("braille")
+                ),
+                menuSubItem(
+                    "PCA Plots", tabName = "WpcaPlots", icon = icon("blackberry")
+                ),
+                menuSubItem(
+                    "Epilepiform Plots (PCA)", tabName = "WepiPlots", icon = icon("user")
+                )
             )
         )
     ),
@@ -115,7 +127,7 @@ ui <- dashboardPage(
                     title = "Calculated Data Tables for App",
                     fluidRow(h3("Summarised Spike Table"), displayDT_ui("s.table")),
                     fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
-                    fluidRow(h3("Selected Table from Scatter Interface"), displayDT_ui("u.table"))
+                    fluidRow(h3("Selected Table from Scatter Interface"), displayDT_ui("n.u.table"))
             ),
             tabItem(tabName = "plots",
                     title = "Histogram Plots",
@@ -190,6 +202,18 @@ ui <- dashboardPage(
             tabItem(tabName = "pcaPlots",
             title = "PCA Plot",
             pca_dat_UI("uberTable")
+            ),
+            tabItem(tabName = "epiPlots",
+                    title = "Epileptiform Plot",
+                    pca_dat_UI("epiTable")
+                    ),
+            tabItem(tabName = "WpcaPlots",
+                    title = "PCA Plot",
+                    pca_dat_UI("wellTable")
+            ),
+            tabItem(tabName = "WepiPlots",
+                    title = "Epileptiform Plot",
+                    pca_dat_UI("epiWellTable")
             )
         )
     )
@@ -337,36 +361,6 @@ server <- function(input, output, session) {
                           mean_maxAmp_pV:var_peakToPeak_pV)
     })
     
-    ##############################################################################
-    # Make a summarised table from the scatter.test which is by channel aggregate
-    # by well and plate here to calculate the mean and variance of each well 
-    # within the experiment then this will feed into new scatter plots where only
-    # datapoints by well are presented
-    
-    well.scat <- reactive({
-        dat <- scat.table()
-        
-        dat <- dat %>% 
-            group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
-            summarise(across(`Spike Count`:var_peakToPeak_pV, list(mean = mean))) %>% 
-            tibble()
-        colnames(dat) <- gsub("_mean", "", colnames(dat))
-        dat
-    })
-    
-   
-    ##############################################################################
-    # With the uber dataset, now create the data structure for plotting of the 
-    # scatter and PCA's after filtering
-    well.uber <- eventReactive(input$w.plotScatter, {
-        scatter.test <- well.scat()
-        
-        scatter.test <- scatter.test %>% 
-            filter(`Dose Label` %in% input$w.dose.label.select) %>% 
-            filter(!!rlang::sym(input$sampleid3) %in% input$w.sample.order) %>% 
-            mutate(!!rlang::sym(input$sampleid3) := factor(!!rlang::sym(input$sampleid3), levels = input$w.sample.order))
-    })
-    
     ############################################################################## 
     # Lets try and modularise this for output into the UI
     #
@@ -377,7 +371,7 @@ server <- function(input, output, session) {
     displayDT_server(id ="s.table", dat = spike.table())
     displayDT_server(id ="u.table", dat = uber.table())
     displayDT_server(id ="sc.table", dat = scat.table())          # raw data table for downstream wrangling
-    displayDT_server(id ="n.u.table", dat = norm.uber.table())    # all variables normalised to control
+    displayDT_server(id ="n.u.table", dat = well.scat())    # all variables normalised to control
     displayDT_server(id ="n.table.out", dat = norm.table.out())   # selected variable for table output
     # displayDT_server(id ="pca.uber", dat = pca.uber$rotated)     # derived PCA data for PCA plotting
     # displayDT_server(id ="pdat.uber", dat = pca.uber$PC1)      # derived pdat for PCA plotting
@@ -658,6 +652,64 @@ server <- function(input, output, session) {
     ##############################################################################
     # PCA Plotting of tables generated
     pca_dat_server(id = "uberTable", dat = scat.table())
+    
+    ##############################################################################
+    # Create a normalised table of measurements from the uber table for the 
+    # epileptiform plot, to contain all entries except for the control then plot
+    # onto a PCA to determine where the samples are sitting. 
+    # 
+    epi.table <- reactive({
+        scatter.test <- scat.table()
+        
+        ctrl <- scatter.test %>% 
+            filter(`Dose Label` == "Control")
+        
+        scatter.test <- left_join(ctrl, scatter.test, by = "key")
+        
+        colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
+        
+        scatter.test <- scatter.test %>% 
+            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        
+        scatter.test <- scatter.test %>% 
+            filter(`Dose Label` != "Control")
+        
+    })
+    
+    pca_dat_server(id = "epiTable", dat = epi.table())
+    
+    ##############################################################################
+    # Make a summarised table from the scatter.test which is by channel aggregate
+    # by well and plate here to calculate the mean and variance of each well 
+    # within the experiment then this will feed into new scatter plots where only
+    # datapoints by well are presented
+    
+    well.scat <- reactive({
+        dat <- scat.table()
+        
+        dat <- dat %>% 
+            group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
+            summarise(across(`Spike Count`:var_peakToPeak_pV, list(mean = mean))) %>% 
+            tibble()
+        colnames(dat) <- gsub("_mean", "", colnames(dat))
+        dat
+    })
+    
+    pca_dat_server(id = "wellTable", dat = well.scat())
+    
+    ##############################################################################
+    # With the uber dataset, now create the data structure for plotting of the 
+    # scatter and PCA's after filtering
+    well.uber <- eventReactive(input$w.plotScatter, {
+        scatter.test <- well.scat() %>% 
+            filter(`Dose Label` != "Control")
+        
+    })
+    
+    pca_dat_server(id = "epiWellTable", dat = well.uber())
+    
 
     #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")
 }
