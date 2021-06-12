@@ -65,7 +65,7 @@ extractMeasurementColumns_server <- function(id, dat){
 
 ###############################################################################
 # Create a module to select the treatment and their order of selection for 
-# scatter plots
+# scatter plots one dose label at a time.
 extractScatter_UI <- function(id) {
   ns <- NS(id)
   tagList(
@@ -131,23 +131,230 @@ extractScatter_server <- function(id, dat){
 
 
 ###############################################################################
-# Create a module to load the data and then add the appropriate keys for 
-# downstream wrangling
+# Create a module to wrangle a data table into a PCA object for downstream 
+# PCA plotting include UI dropdowns to subset the data object before it is
+# processed into a PCA object for downstream plotting. Make the groups
+# user selectable with selectize
+pca_dat_UI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    box(
+      uiOutput(ns("doseLabel")),
+      uiOutput(ns("sampOrder")),
+      actionButton(ns("processPCA"), "Select Groups and Plot PCA")
+    )
+  )
+}
 
+
+##################################
+# Server side actions for PCA
+#
+pca_dat_server <- function(id, dat){
+  moduleServer(id, function(input, output, session){
+    ns <- session$ns
+    output$sampOrder <- renderUI({
+      data_available <- dat %>% 
+        select(`Compound ID`) %>% 
+        pull()
+      
+      data_levels <- unique(data_available)
+      
+      data_available <- factor(data_available,levels = data_levels)
+      
+      selectizeInput(inputId = ns("sampleOrderSelect"),
+                     label = "Group Select / Order :", 
+                     choices = data_available,
+                     multiple = T, 
+                     selected = NULL)
+    })
+    
+    output$doseLabel <- renderUI({
+      data_available <- dat %>% 
+        select(`Dose Label`) %>% 
+        distinct() %>% 
+        pull()
+      
+      data_available <- unique(data_available)
+      
+      selectizeInput(inputId = ns("doseLabelSelect"),
+                  label = "Select Dose Group :", 
+                  choices = data_available,
+                  multiple = T, 
+                  selected = data_available[1:2])
+    })
+    
+    pcaDat <- eventReactive(input$processPCA, {
+      pc <- dat %>%
+        filter(`Dose Label` %in% input$doseLabelSelect) %>%
+        mutate(across(everything(), ~replace_na(.x, 0))) %>%
+        select(key2, `Spike Count`:var_peakToPeak_pV) %>%
+        as.data.frame()
+
+      rownames(pc) <- pc$key2
+
+      pc <- t(pc[, 2:ncol(pc)])
+      
+      pdat <- dat %>% 
+        select(key2, `Channel ID`:`Compound ID`) %>%
+        distinct() %>%
+        filter(`Compound ID` %in% input$sampleOrderSelect) %>%
+        as.data.frame()
+      
+      rownames(pdat) <- pdat$key2
+      
+      pc <- pc[ , rownames(pdat)]
+      
+      pcaObj <- pca(pc, pdat, scale = TRUE, removeVar = 0.1)
+
+    })
+    
+
+    return(pcaDat
+    )
+  })
+}
+
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+pca_plot_UI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    box(h3("Circle Configuration"),
+          checkboxInput(inputId = "pca.circle",
+                        "Draw circles",
+                        FALSE),
+          sliderInput(inputId = "pca.circle.line",
+                      step = 0.25,
+                      label = "Circle line size:",
+                      min = 0.1,
+                      max = 5,
+                      value = 0.25
+          ),
+          h3("Confidence Ellipse Configuration"),
+          checkboxInput(inputId = "pca.ellipse",
+                        "Draw confidence ellipses",
+                        FALSE),
+          sliderInput("pca.ellipse.conf", "Set confidence interval: ", min = 0.5, max = 1, value = 0.95),
+          h3("PCA Loadings Configuration"),
+          checkboxInput(inputId = "pca.loadings",
+                        "Show Component Loading",
+                        FALSE),
+          sliderInput(inputId = "pca.n.loadings",
+                      step = 1,
+                      label = "Select number of loadings : ",
+                      min = 2,
+                      max = 15,
+                      value = 5)
+        ),
+    box(plotOutput(ns("screePlot"))),
+    box(plotOutput(ns("pcaPlot")))
+  )
+}
+
+
+##################################
+# Server side actions ingests PCA object for plotting
+#
+pca_plot_server <- function(id, dat){
+  moduleServer(id, function(input, output, session) {
+    output$screePlot <- renderPlot({
+      screeplot(dat)
+    })
+    
+    output$pcaPlot <- renderPlot({
+      biplot(dat,
+             showLoadings = input$pca.loadings,
+             ntopLoadings = input$pca.n.loadings,
+             lab = NULL, 
+             legendPosition = "right", 
+             colby = "Compound ID", 
+             encircle = input$pca.circle, 
+             encircleFill = input$pca.circle,
+             encircleLineSize = input$pca.circle.line,
+             encircleLineCol = "black",
+             ellipse = input$pca.ellipse,
+             ellipseConf = input$pca.ellipse.conf,
+             ellipseFill = input$pca.ellipse,
+             ellipseLineSize = input$pca.circle.line)
+      
+    })
+  })
+}
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+# pca_plot_UI <- function(id) {
+#   
+# }
 
 
 ##################################
 # Server side actions
 #
+# pca_plot_server <- function(id, dat){
+#   moduleServer(id, function(input, output, session) {
+#     
+#   })
+# }
 
 
 
 ###############################################################################
-# Create a module to load the data and then add the appropriate keys for 
-# downstream wrangling
-
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+# pca_plot_UI <- function(id) {
+#   
+# }
 
 
 ##################################
 # Server side actions
 #
+# pca_plot_server <- function(id, dat){
+#   moduleServer(id, function(input, output, session) {
+#     
+#   })
+# }
+
+
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+# pca_plot_UI <- function(id) {
+#   
+# }
+
+
+##################################
+# Server side actions
+#
+# pca_plot_server <- function(id, dat){
+#   moduleServer(id, function(input, output, session) {
+#     
+#   })
+# }
+
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+# pca_plot_UI <- function(id) {
+#   
+# }
+
+
+##################################
+# Server side actions
+#
+# pca_plot_server <- function(id, dat){
+#   moduleServer(id, function(input, output, session) {
+#     
+#   })
+# }
+
+

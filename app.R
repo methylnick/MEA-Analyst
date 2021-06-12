@@ -186,6 +186,15 @@ ui <- dashboardPage(
                     fluidRow(h3("Table of Significance Values"),
                              tableOutput(outputId = "table_stats")
                     )
+            ),
+            tabItem(tabName = "pcaPlots",
+            title = "PCA Plot",
+            fluidRow(pca_dat_UI("uberTable")),
+            fluidRow(pca_plot_UI("uberTablePlot")),
+            h3("PCA Data - Diagnostic"),
+            fluidRow(displayDT_ui("pca.uber")),
+            h3("PCA pdata diagnostic"),
+            fluidRow(displayDT_ui("pdat.uber"))
             )
         )
     )
@@ -372,9 +381,11 @@ server <- function(input, output, session) {
     displayDT_server(id ="s.test", dat = sp.test())
     displayDT_server(id ="s.table", dat = spike.table())
     displayDT_server(id ="u.table", dat = uber.table())
-    displayDT_server(id ="sc.table", dat = scat.table())
-    displayDT_server(id ="n.u.table", dat = norm.uber.table())
-    displayDT_server(id ="n.table.out", dat = norm.table.out())
+    displayDT_server(id ="sc.table", dat = scat.table())          # raw data table for downstream wrangling
+    displayDT_server(id ="n.u.table", dat = norm.uber.table())    # all variables normalised to control
+    displayDT_server(id ="n.table.out", dat = norm.table.out())   # selected variable for table output
+    displayDT_server(id ="pca.uber", dat = pca.uber$rotated)     # derived PCA data for PCA plotting
+    displayDT_server(id ="pdat.uber", dat = pca.uber$PC1)      # derived pdat for PCA plotting
 
     ############################################################################## 
     # Lets try and modularise measurement column extraction for selection in 
@@ -649,7 +660,12 @@ server <- function(input, output, session) {
     }, digits = 4
     )
     
+    ##############################################################################
+    # PCA Plotting of tables generated
+    pca.uber <-  pca_dat_server(id = "uberTable", dat = scat.table())
+    pca.uber.plot <- pca_plot_server(id = "uberTablePlot", dat = pca.uber())
     
+    #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")
 }
 
 # Run the application 
