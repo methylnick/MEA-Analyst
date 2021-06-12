@@ -55,6 +55,11 @@ ui <- dashboardPage(
                 menuSubItem(
                     "Epilepiform Plots (PCA)", tabName = "epiPlots", icon = icon("user")
                 )
+            ),
+            menuItem("Statistical Testing - By Channel", tabName = "stats", icon = icon("ruler-combined"),
+                     menuSubItem(
+                         "Plotting Statsticial Significance", tabName = "stats", icon = icon("ruler")
+                     )
             )
         )
     ),
@@ -107,7 +112,7 @@ ui <- dashboardPage(
                     fluidRow(h3("Baseline Spike Data"), displayDT_ui("s.base"))
             ),
             tabItem(tabName = "spikeTablesMean",
-                    title = "Calculated Means from Spike Data",
+                    title = "Calculated Data Tables for App",
                     fluidRow(h3("Summarised Spike Table"), displayDT_ui("s.table")),
                     fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
                     fluidRow(h3("Selected Table from Scatter Interface"), displayDT_ui("u.table"))
@@ -162,9 +167,25 @@ ui <- dashboardPage(
                              box(title = " - Relative to Baseline ( % ) - 'jitter'", plotlyOutput(outputId = "scatter_box_rel"))
                     ),
                     fluidRow(box(title =" - Relative to Baseline ( % ) - 'beeswarm'", plotlyOutput(outputId = "swarm_box_rel")),
-                             box(displayDT_ui("n.u.table"))
+                             box(displayDT_ui("n.table.out"))
                     )
                     
+            ),
+            tabItem(tabName = "stats",
+                    title = "Statstical Analysis from Scatter Plots",
+                    fluidRow(box(title = "Statistical Significance Plots Parameters",
+                                 sliderInput(inputId = "stat.y.adj",step = 0.001,
+                                             label = "Adjust signif marks y-position :",
+                                             min = 0.001,
+                                             max = 1,
+                                             value = 1),
+                                 checkboxInput('stats.compare.all', 'Table: Show all contrasts?', FALSE),
+                                 checkboxInput('sort.by.pval', 'Table: Sort by p value', FALSE),
+                                 downloadButton("down.swarm.box.rel.stat", "Export plot")),
+                             box(plotOutput(outputId = "stats"))),
+                    fluidRow(h3("Table of Significance Values"),
+                             tableOutput(outputId = "table_stats")
+                    )
             )
         )
     )
@@ -353,6 +374,7 @@ server <- function(input, output, session) {
     displayDT_server(id ="u.table", dat = uber.table())
     displayDT_server(id ="sc.table", dat = scat.table())
     displayDT_server(id ="n.u.table", dat = norm.uber.table())
+    displayDT_server(id ="n.table.out", dat = norm.table.out())
 
     ############################################################################## 
     # Lets try and modularise measurement column extraction for selection in 
@@ -432,7 +454,7 @@ server <- function(input, output, session) {
                 geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
                 geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
                 theme_classic() +
-                labs(y=input$measurement) +
+                labs(y=(scatterCols())) +
                 theme(
                     axis.text = element_text(size = input$text.size,face = "bold"),
                     axis.title = element_text(size = input$text.size*1.3,face = "bold"),
@@ -470,8 +492,8 @@ server <- function(input, output, session) {
     })
     
     ##############################################################################
-    # This normalises the measurement values to the baseline data table does a merge 
-    # on channel ID
+    # Makes the normalised jitter plot to the control wells 
+    # 
     output$scatter_box_rel <- renderPlotly({
         ggplotly(
             norm.uber.table() %>% 
@@ -486,7 +508,7 @@ server <- function(input, output, session) {
                 geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
                 geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
                 theme_classic() +
-                labs(y=paste0(input$measurement,"\n% Relative to Baseline\n")) +
+                labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
                 theme(axis.text = element_text(size = input$text.size,face = "bold"),
                       axis.title = element_text(size = input$text.size*1.3,face = "bold"),
                       axis.title.x = element_blank(),
@@ -494,6 +516,138 @@ server <- function(input, output, session) {
                 coord_cartesian(ylim=c(0,input$ylim.rel))
         )
     })
+    
+    ##############################################################################
+    # This is the same plot as above however in a beeswarm.
+    output$swarm_box_rel <- renderPlotly({
+        ggplotly(
+            norm.uber.table() %>% 
+                ggplot(aes(y = !!rlang::sym(scatterCols()), 
+                           x = `Compound ID`,
+                           col = `Compound ID`,
+                           label = `Channel ID`,
+                           label2 = `Channel Label`,
+                           label3 = `Well ID`,
+                           label4 = plate)) +
+                geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
+                geom_beeswarm(priority = c("ascending"),size=input$point.size, alpha=0.5,cex = 0.8, groupOnX = TRUE) +
+                geom_boxplot(alpha = 0.6, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8) +
+                theme_classic() +
+                labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
+                theme(axis.text = element_text(size = input$text.size,face = "bold"),
+                      axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                      axis.title.x = element_blank(),
+                      legend.position = "none") +
+                coord_cartesian(ylim=c(0,input$ylim.rel))
+        )
+        
+    })
+    
+    ##############################################################################
+    # Create a normalised table for export and display in the app
+    norm.table.out <- reactive({
+        f <- norm.uber.table() %>% 
+            select(`Channel ID`:`Dose Label`, !!rlang::sym(scatterCols())) %>% 
+            rename(`Normalised Value` = !!rlang::sym(scatterCols()))
+    })
+    
+    ##############################################################################
+    # Export the normalised table for visualisation
+    output$downloadData <- downloadHandler(
+        filename = function() {
+            paste0(Sys.Date(), "_", !!rlang::sym(scatterCols()), "_normalised", ".csv")
+        },
+        content = function(file) {
+            write.csv(norm.table.out(), file, row.names = FALSE)
+        }
+    )
+    
+    ##############################################################################
+    # stats calculations for output and plotting by the app. 
+    # modified again from the original code, we are taking selected columns that
+    # have the same name within the normalised uber table. 
+    output$stats <- renderPlot({
+        dat <- norm.uber.table()
+        
+        colnames(dat) <- gsub(" ", "_", colnames(dat))
+        
+        stat.test <- t_test(data = dat,
+                            formula = as.formula(paste(str_replace((scatterCols()), " ", "_"), "~", "Compound_ID")), 
+                            ref.group = scatterChannel$sampleOrder()[1])
+        
+        stat.test <- stat.test %>% 
+            add_xy_position(x = "Compound_ID") %>% 
+            mutate(y.position = y.position * input$stat.y.adj)
+        
+        
+        ggplot(dat, aes_string(y = str_replace((scatterCols()), " ", "_"), x = "Compound_ID",
+                               col= "Compound_ID")) +
+            geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
+            geom_beeswarm(priority = c("ascending"),size=input$point.size, alpha=0.5,cex = 0.8) +
+            geom_boxplot(alpha = 0.6, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8) +
+            theme_classic() +
+            labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
+            theme(
+                axis.text = element_text(size = input$text.size,face = "bold"),
+                axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                axis.title.x = element_blank(),
+                legend.position = "none") +
+            coord_cartesian(ylim=c(0,max(stat.test$y.position))) +
+            stat_pvalue_manual(stat.test, label = "p.adj.signif", tip.length = 0.01*input$stat.y.adj)
+        
+    }) 
+    
+    ##############################################################################
+    output$swarm_box_rel.stat <- renderPlot({
+        
+        Funct_swarm_box_rel.stat(uber.table, uber.table() %>% 
+                                     filter(`Dose Label` == "Control"))
+        
+    },height = function(){input$stat.plot.h})
+    
+    
+    ############################################################################## 
+    output$down.swarm_box_rel.stat <- downloadHandler(
+        filename = function() {
+            paste0("MEA_statplot_", Sys.Date(), ".pdf")
+        },
+        content = function(file) {
+            pdf(file = file,width = 10,height = 6)
+            print(Funct_swarm_box_rel.stat(info(),info.base()))
+            dev.off()
+        }
+    )
+    
+    ############################################################################## 
+    output$table_stats <- renderTable({
+        dat <- norm.uber.table() 
+        colnames(dat) <- gsub(" ", "_", colnames(dat))
+        
+        stat.columns <- c("group1",	"n1", "estimate1", "group2", "n2", 
+                          "estimate2", "estimate", "conf.low", "conf.high","p",	
+                          "p.adj","p.adj.signif")
+        
+        tab.res <-if(input$stats.compare.all==TRUE) {
+            t_test(data = dat,
+                   formula = as.formula(paste(str_replace((scatterCols()), " ", "_"), "~",
+                                                         "Compound_ID")),
+                   conf.level = 0.95,detailed = T)[,stat.columns]
+        } else { 
+            t_test(data = dat,formula = as.formula(paste(str_replace((scatterCols()), " ", "_"), "~",
+                                                         "Compound_ID")), 
+                   ref.group = scatterChannel$sampleOrder()[1],conf.level = 0.95,detailed = T)[,stat.columns]
+        }
+        colnames(tab.res) <- c("group1",	"n1", "Mean1", "group2",	"n2",	"Mean2",
+                               "Diff_Means_(DM)", "95%_CI_Low_DM", "95%_CI_high_DM","p",	"p.adj","p.adj.signif")
+        
+        if(input$sort.by.pval==TRUE) {
+            tab.res[order(tab.res$p,decreasing = F),]
+        } else { 
+            tab.res[order(tab.res$group2,decreasing = F),]
+        }
+        
+    }, digits = 4
+    )
     
     
 }
