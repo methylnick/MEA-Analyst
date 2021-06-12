@@ -138,10 +138,48 @@ extractScatter_server <- function(id, dat){
 pca_dat_UI <- function(id) {
   ns <- NS(id)
   tagList(
+    fluidRow(
     box(
+      h3("Select Groups and Treatments"),
       uiOutput(ns("doseLabel")),
       uiOutput(ns("sampOrder")),
+      h3("Circle Configuration"),
+      checkboxInput(inputId = ns("pca.circle"),
+                    "Draw circles",
+                    FALSE),
+      sliderInput(inputId = ns("pca.circle.line"),
+                  step = 0.25,
+                  label = "Circle line size:",
+                  min = 0.1,
+                  max = 5,
+                  value = 0.25
+      ),
       actionButton(ns("processPCA"), "Select Groups and Plot PCA")
+    ),
+    box(h3("Confidence Ellipse Configuration"),
+        checkboxInput(inputId = ns("pca.ellipse"),
+                      "Draw confidence ellipses",
+                      FALSE),
+        sliderInput(ns("pca.ellipse.conf"), "Set confidence interval: ", min = 0.5, max = 1, value = 0.95),
+        h3("PCA Loadings Configuration"),
+        checkboxInput(inputId = ns("pca.loadings"),
+                      "Show Component Loading",
+                      FALSE),
+        sliderInput(inputId = ns("pca.n.loadings"),
+                    step = 1,
+                    label = "Select number of loadings : ",
+                    min = 2,
+                    max = 15,
+                    value = 5)
+    )
+    ),
+    fluidRow(
+      box(
+        plotOutput(ns("screePlot"))
+          ),
+      box(
+        plotOutput(ns("pcaPlot"))
+          )
     )
   )
 }
@@ -186,91 +224,38 @@ pca_dat_server <- function(id, dat){
     
     pcaDat <- eventReactive(input$processPCA, {
       pc <- dat %>%
-        filter(`Dose Label` %in% input$doseLabelSelect) %>%
-        mutate(across(everything(), ~replace_na(.x, 0))) %>%
-        select(key2, `Spike Count`:var_peakToPeak_pV) %>%
-        as.data.frame()
-
-      rownames(pc) <- pc$key2
-
-      pc <- t(pc[, 2:ncol(pc)])
+        filter(`Dose Label` %in% input$doseLabelSelect,
+               `Compound ID` %in% input$sampleOrderSelect) %>%
+        mutate(across(everything(), ~replace_na(.x, 0)))
       
-      pdat <- dat %>% 
-        select(key2, `Channel ID`:`Compound ID`) %>%
-        distinct() %>%
-        filter(`Compound ID` %in% input$sampleOrderSelect) %>%
+      pdat <- pc %>% 
+        select(`Compound ID`:`Dose Label`) %>% 
         as.data.frame()
       
-      rownames(pdat) <- pdat$key2
+      pc <- pc %>%
+        select(`Spike Count`:var_peakToPeak_pV) %>%
+        as.matrix()
       
-      pc <- pc[ , rownames(pdat)]
+      rownames(pc) <- seq(1:nrow(pc))
+
+      pc <- t(pc)
       
-      pcaObj <- pca(pc, pdat, scale = TRUE, removeVar = 0.1)
+      pcaObj <- pca(pc, pdat, scale = TRUE, removeVar = 0.2)
 
     })
     
-
-    return(pcaDat
-    )
-  })
-}
-
-
-###############################################################################
-# Create a module to visualise the PCA plot and also tweak it's appearance as 
-# necessary with a particular data table going in
-pca_plot_UI <- function(id) {
-  ns <- NS(id)
-  tagList(
-    box(h3("Circle Configuration"),
-          checkboxInput(inputId = "pca.circle",
-                        "Draw circles",
-                        FALSE),
-          sliderInput(inputId = "pca.circle.line",
-                      step = 0.25,
-                      label = "Circle line size:",
-                      min = 0.1,
-                      max = 5,
-                      value = 0.25
-          ),
-          h3("Confidence Ellipse Configuration"),
-          checkboxInput(inputId = "pca.ellipse",
-                        "Draw confidence ellipses",
-                        FALSE),
-          sliderInput("pca.ellipse.conf", "Set confidence interval: ", min = 0.5, max = 1, value = 0.95),
-          h3("PCA Loadings Configuration"),
-          checkboxInput(inputId = "pca.loadings",
-                        "Show Component Loading",
-                        FALSE),
-          sliderInput(inputId = "pca.n.loadings",
-                      step = 1,
-                      label = "Select number of loadings : ",
-                      min = 2,
-                      max = 15,
-                      value = 5)
-        ),
-    box(plotOutput(ns("screePlot"))),
-    box(plotOutput(ns("pcaPlot")))
-  )
-}
-
-
-##################################
-# Server side actions ingests PCA object for plotting
-#
-pca_plot_server <- function(id, dat){
-  moduleServer(id, function(input, output, session) {
     output$screePlot <- renderPlot({
-      screeplot(dat)
+      screeplot(pcaDat())
     })
     
     output$pcaPlot <- renderPlot({
-      biplot(dat,
+      biplot(pcaDat(),
              showLoadings = input$pca.loadings,
              ntopLoadings = input$pca.n.loadings,
              lab = NULL, 
              legendPosition = "right", 
-             colby = "Compound ID", 
+             colby = "Dose Label", 
+             shape = "Compound ID",
              encircle = input$pca.circle, 
              encircleFill = input$pca.circle,
              encircleLineSize = input$pca.circle.line,
@@ -281,6 +266,27 @@ pca_plot_server <- function(id, dat){
              ellipseLineSize = input$pca.circle.line)
       
     })
+  })
+}
+
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+pca_plot_UI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    
+  )
+}
+
+
+##################################
+# Server side actions ingests PCA object for plotting
+#
+pca_plot_server <- function(id, dat){
+  moduleServer(id, function(input, output, session) {
+    
   })
 }
 
