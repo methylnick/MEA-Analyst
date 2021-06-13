@@ -227,8 +227,8 @@ ui <- dashboardPage(
             tabItem(tabName = "WscatPlotsNorm",
                     title = "Scatter Plots - Normalised",
                     box(
-                        extractScatter_UI("wellChScatter"),
-                        extractMeasurementColumns_UI("wellcolsScatter"),
+                        extractScatter_UI("wellChScatterNorm"),
+                        extractMeasurementColumns_UI("wellcolsScatterNorm"),
                         actionButton("WplotScatter2", "Select Groups and Plot")
                     ),
                     fluidRow(
