@@ -758,14 +758,13 @@ server <- function(input, output, session) {
             dplyr::filter(`Dose Label` == wellScatChannel$doseLabelSelect()) %>% 
             dplyr::filter(`Compound ID` %in% wellScatChannel$sampleOrder()) %>% 
             mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannel$sampleOrder()))
-        
-        return(scatter.test)
-    })
+    }) 
     
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTable", dat = well.table(), yvarInput = wellScatCols())
+    scatter_plot_server(id = "wellTable", dat = well.table(), 
+                        yvarInput = wellScatCols(), actionIn = input$WplotScatter)
     
     
     ############################################################################## 
@@ -808,12 +807,13 @@ server <- function(input, output, session) {
             dplyr::filter(`Compound ID` %in% wellScatChannelNorm$sampleOrder()) %>% 
             mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannelNorm$sampleOrder()))
         
-    })
+    }) 
     
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTableNorm", dat = norm.well.table(), yvarInput = wellScatColsNorm())
+    scatter_plot_server(id = "wellTableNorm", dat = norm.well.table(), 
+                        yvarInput = wellScatColsNorm(), actionIn = input$WplotScatter2)
     
     
 
