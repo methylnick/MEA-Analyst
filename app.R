@@ -273,7 +273,7 @@ server <- function(input, output, session) {
         ifelse(input$rm.inactive==TRUE,
                return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level)),
                return(f))
-    })
+    }) 
     
     ##############################################################################
     # This is the baseline table and is set to either include or remove inactive
@@ -297,7 +297,7 @@ server <- function(input, output, session) {
         ifelse(input$rm.inactive.base==TRUE,
                return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level.baseline)),
                return(f))
-    })
+    }) 
     
     ##############################################################################
     # This is the baseline spike table
@@ -319,7 +319,7 @@ server <- function(input, output, session) {
         ifelse(input$rm.inactive.base==TRUE,
                return(f %>% filter(key %in% filter$key)),
                return(f))
-    })
+    }) 
     
     ##############################################################################
     # This is the baseline table and is set to either include or remove inactive
@@ -341,7 +341,7 @@ server <- function(input, output, session) {
         ifelse(input$rm.inactive.base==TRUE,
                return(f %>% filter(key %in% filter$key)),
                return(f))
-    })
+    }) 
     
     ##############################################################################
     # Make a cleaned and filtered data table for downstream analysis and plotting 
@@ -707,7 +707,8 @@ server <- function(input, output, session) {
         scatter.test <- scatter.test %>% 
             filter(`Dose Label` != "Control")
         
-    })
+    }) %>% 
+        bindCache(scat.table())
     
     pca_dat_server(id = "epiTable", dat = epi.table())
     
@@ -726,7 +727,8 @@ server <- function(input, output, session) {
             tibble()
         colnames(dat) <- gsub("_mean", "", colnames(dat))
         dat
-    })
+    }) %>% 
+        bindCache(scat.table())
     
     pca_dat_server(id = "wellTable", dat = well.scat())
     
@@ -777,8 +779,14 @@ server <- function(input, output, session) {
     # selected and filtered for the variables of interest. Calculate the normalised
     # values for all measures and columns of interest for the scatter plot
     # 
-    norm.well.table <- eventReactive(input$WplotScatter2, {
+    
+    n.well.table <- eventReactive(input$WplotScatter2, {
         scatter.test <- well.scat()
+        ## Create a key containing plate and well ID for merging with control and norm
+        scatter.test <- scatter.test %>% 
+            mutate(key4 = key3) %>% 
+            separate(key4, into=(c("a", "b", "c")), sep = "_") %>% 
+            mutate(key = paste0(a, "_", b))
         
         ctrl <- scatter.test %>% 
             filter(`Dose Label` == "Control")
@@ -791,11 +799,14 @@ server <- function(input, output, session) {
             mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
                           ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
             select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+    }) 
+    
+    norm.well.table <- reactive({
         
-        scatter.test <- scatter.test %>% 
-            dplyr::filter(`Dose Label` == wellChScatterNorm$doseLabelSelect()) %>% 
-            dplyr::filter(`Compound ID` %in% wellChScatterNorm$sampleOrder()) %>% 
-            mutate(`Compound ID` := factor(`Compound ID`, levels = wellChScatterNorm$sampleOrder()))
+        scatter.test <- n.well.table() %>% 
+            dplyr::filter(`Dose Label` == wellScatChannelNorm$doseLabelSelect()) %>% 
+            dplyr::filter(`Compound ID` %in% wellScatChannelNorm$sampleOrder()) %>% 
+            mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannelNorm$sampleOrder()))
         
     })
     
