@@ -64,7 +64,10 @@ ui <- dashboardPage(
             menuItem(
                 "Plots - By Well", tabName = "Wplots", icon = icon("chart-bar"),
                 menuSubItem(
-                    "Scatter Plots", tabName = "WscatPlots", icon = icon("braille")
+                    "Scatter Plots - Raw", tabName = "WscatPlots", icon = icon("braille")
+                ),
+                menuSubItem(
+                    "Scatter Plots - Normalised", tabName = "WscatPlotsNorm", icon = icon("braille")
                 ),
                 menuSubItem(
                     "PCA Plots", tabName = "WpcaPlots", icon = icon("blackberry")
@@ -210,6 +213,28 @@ ui <- dashboardPage(
                     title = "Epileptiform Plot",
                     pca_dat_UI("epiTable")
                     ),
+            tabItem(tabName = "WscatPlots",
+                    title = "Scatter Plots - Raw",
+                        box(
+                            extractScatter_UI("wellChScatter"),
+                            extractMeasurementColumns_UI("wellcolsScatter"),
+                            actionButton("WplotScatter", "Select Groups and Plot")
+                        ),
+                    fluidRow(
+                    scatter_plot_UI("wellTable")
+                    )
+            ),
+            tabItem(tabName = "WscatPlotsNorm",
+                    title = "Scatter Plots - Normalised",
+                    box(
+                        extractScatter_UI("wellChScatter"),
+                        extractMeasurementColumns_UI("wellcolsScatter"),
+                        actionButton("WplotScatter", "Select Groups and Plot")
+                    ),
+                    fluidRow(
+                        scatter_plot_UI("wellTable")
+                    )
+            ),
             tabItem(tabName = "WpcaPlots",
                     title = "PCA Plot",
                     pca_dat_UI("wellTable")
@@ -715,6 +740,70 @@ server <- function(input, output, session) {
     })
     
     pca_dat_server(id = "epiWellTable", dat = well.uber())
+    
+    ############################################################################## 
+    # Modularise selection columns extraction for 
+    # graphs then extract out the value for plotting
+    wellScatChannel <- extractScatter_server(id = "wellChScatter", dat = well.scat())
+    wellScatCols <- extractMeasurementColumns_server(id = "wellcolsScatter", dat = well.scat())
+    
+    ##############################################################################
+    # With the uber dataset, now create the data structure for plotting of the 
+    # scatter and PCA's after filtering
+    well.table <- eventReactive(input$WplotScatter, {
+        
+        scatter.test <- well.scat() %>% 
+            dplyr::filter(`Dose Label` == wellScatChannel$doseLabelSelect()) %>% 
+            dplyr::filter(`Compound ID` %in% wellScatChannel$sampleOrder()) %>% 
+            mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannel$sampleOrder()))
+        
+        return(scatter.test)
+    })
+    
+    ##############################################################################
+    # Plot with the scatter module and give it a go
+    
+    scatter_plot_server(id = "wellTable", dat = well.table(), yvarInput = wellScatCols())
+    
+    
+    ############################################################################## 
+    # Modularise selection columns extraction for 
+    # graphs then extract out the value for plotting
+    wellScatChannelNorm <- extractScatter_server(id = "wellChScatterNorm", dat = well.scat())
+    wellScatColsNorm <- extractMeasurementColumns_server(id = "wellcolsScatterNorm", dat = well.scat())
+    
+    ##############################################################################
+    # Create a normalised table of measurements from the uber well data that has been
+    # selected and filtered for the variables of interest. Calculate the normalised
+    # values for all measures and columns of interest for the scatter plot
+    # 
+    norm.well.table <- eventReactive(input$plotScatter, {
+        scatter.test <- well.scat()
+        
+        ctrl <- scatter.test %>% 
+            filter(`Dose Label` == "Control")
+        
+        scatter.test <- left_join(ctrl, scatter.test, by = "key")
+        
+        colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
+        
+        scatter.test <- scatter.test %>% 
+            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        
+        scatter.test <- scatter.test %>% 
+            dplyr::filter(`Dose Label` == wellChScatterNorm$doseLabelSelect()) %>% 
+            dplyr::filter(`Compound ID` %in% wellChScatterNorm$sampleOrder()) %>% 
+            mutate(`Compound ID` := factor(`Compound ID`, levels = wellChScatterNorm$sampleOrder()))
+        
+    })
+    
+    ##############################################################################
+    # Plot with the scatter module and give it a go
+    
+    scatter_plot_server(id = "wellTableNorm", dat = norm.well.table(), yvarInput = wellScatColsNorm())
+    
     
 
     #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")

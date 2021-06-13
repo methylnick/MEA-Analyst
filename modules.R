@@ -91,7 +91,9 @@ extractScatter_server <- function(id, dat){
       
       data_levels <- unique(data_available)
       
-      data_available <- factor(data_available,levels = data_levels)
+      data_levels <- data_levels[order(data_levels)]
+      
+      data_levels <- factor(data_levels,levels = data_levels)
       
       selectizeInput(inputId = ns("sampleOrderSelect"),
                      label = "Group Select / Order :", 
@@ -275,20 +277,64 @@ pca_dat_server <- function(id, dat){
 ###############################################################################
 # Create a module to visualise the PCA plot and also tweak it's appearance as 
 # necessary with a particular data table going in
-pca_plot_UI <- function(id) {
+scatter_plot_UI <- function(id) {
   ns <- NS(id)
   tagList(
-    
+    box(title = "Tweaks to the Charts",
+        sliderInput(inputId = ns("point.size"),step = 0.5,
+                    label = "Point Size :",
+                    min = 0,
+                    max = 8,
+                    value = 3),
+        sliderInput(inputId = ns("box.width"),step = 0.05,
+                    label = "Box Width :",
+                    min = 0.05,
+                    max = 0.8,
+                    value = 0.5),
+        sliderInput(inputId = ns("ylim.rel"),step = 100,
+                    label = "y limit %Rel :",
+                    min = 200,
+                    max = 2000,
+                    value = 800),
+        sliderInput(inputId = ns("text.size"),step = 1,
+                    label = "Text Size :",
+                    min = 0,
+                    max = 30,
+                    value = 6)
+    ),
+    box(title = " - Raw Data", plotlyOutput(outputId = ns("scatter_box"))
+    )
   )
 }
 
 
 ##################################
 # Server side actions ingests PCA object for plotting
-#
-pca_plot_server <- function(id, dat){
+# Requires a yVarInput to select the appropriate y value for plotting
+scatter_plot_server <- function(id, dat, yvarInput){
   moduleServer(id, function(input, output, session) {
-    
+    ns <- session$ns
+      output$scatter_box <- renderPlotly({
+        ggplotly(
+          dat %>% 
+            ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
+                       x = `Compound ID`,
+                       col= `Compound ID`,
+                       label = `key3`,
+                       label2 = `plate`)) +
+            geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
+            geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
+            geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+            theme_classic() +
+            labs(y=(yvarInput)) +
+            theme(
+              axis.text = element_text(size = input$text.size,face = "bold"),
+              axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+              axis.title.x = element_blank(),
+              legend.position = "none"
+            )
+        )
+    })
   })
 }
 
