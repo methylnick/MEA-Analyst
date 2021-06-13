@@ -127,7 +127,10 @@ ui <- dashboardPage(
                     title = "Calculated Data Tables for App",
                     fluidRow(h3("Summarised Spike Table"), displayDT_ui("s.table")),
                     fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
-                    fluidRow(h3("Selected Table from Scatter Interface"), displayDT_ui("n.u.table"))
+                    fluidRow(h3("Uber Table"), displayDT_ui("u.table")),
+                    fluidRow(h3("Normalised Uber Table"), displayDT_ui("n.u.table")),
+                    fluidRow(h3("Epi Table"), displayDT_ui("e.table")),
+                    fluidRow(h3("Well normalised Table"), displayDT_ui("w.scat"))
             ),
             tabItem(tabName = "plots",
                     title = "Histogram Plots",
@@ -239,7 +242,8 @@ server <- function(input, output, session) {
                    key2 = paste0(`Channel ID`, "_",
                                  `Dose Label`, "_", # need this for PCA
                                  plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`))
+                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% 
+            select(-`Active Channel`)
         
         ifelse(input$rm.inactive==TRUE,
                return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level)),
@@ -262,7 +266,9 @@ server <- function(input, output, session) {
                    key2 = paste0(`Channel ID`, "_",
                                  `Dose Label`, "_", # need this for PCA
                                  plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) #set up channel ID and experiment
+                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% #set up channel ID and experiment
+            select(-`Active Channel`) 
+        
         ifelse(input$rm.inactive.base==TRUE,
                return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level.baseline)),
                return(f))
@@ -371,10 +377,10 @@ server <- function(input, output, session) {
     displayDT_server(id ="s.table", dat = spike.table())
     displayDT_server(id ="u.table", dat = uber.table())
     displayDT_server(id ="sc.table", dat = scat.table())          # raw data table for downstream wrangling
-    displayDT_server(id ="n.u.table", dat = well.scat())    # all variables normalised to control
+    displayDT_server(id ="n.u.table", dat = norm.uber.table())    # all variables normalised to control
     displayDT_server(id ="n.table.out", dat = norm.table.out())   # selected variable for table output
-    # displayDT_server(id ="pca.uber", dat = pca.uber$rotated)     # derived PCA data for PCA plotting
-    # displayDT_server(id ="pdat.uber", dat = pca.uber$PC1)      # derived pdat for PCA plotting
+    displayDT_server(id ="e.table", dat = epi.table())     # epileptiform table (normalised for PCA)
+    displayDT_server(id ="w.scat", dat = well.scat())      # well average table
 
     ############################################################################## 
     # Lets try and modularise measurement column extraction for selection in 
@@ -702,7 +708,7 @@ server <- function(input, output, session) {
     ##############################################################################
     # With the uber dataset, now create the data structure for plotting of the 
     # scatter and PCA's after filtering
-    well.uber <- eventReactive(input$w.plotScatter, {
+    well.uber <- reactive({
         scatter.test <- well.scat() %>% 
             filter(`Dose Label` != "Control")
         

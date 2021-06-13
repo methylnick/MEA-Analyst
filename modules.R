@@ -224,9 +224,11 @@ pca_dat_server <- function(id, dat){
     
     pcaDat <- eventReactive(input$processPCA, {
       pc <- dat %>%
-        filter(`Dose Label` %in% input$doseLabelSelect,
-               `Compound ID` %in% input$sampleOrderSelect) %>%
         mutate(across(everything(), ~replace_na(.x, 0)))
+      
+      pc <- pc %>% 
+        filter(`Dose Label` %in% input$doseLabelSelect,
+               `Compound ID` %in% input$sampleOrderSelect)
       
       pdat <- pc %>% 
         select(`Compound ID`:`Dose Label`) %>% 
@@ -237,11 +239,10 @@ pca_dat_server <- function(id, dat){
         as.matrix()
       
       rownames(pc) <- seq(1:nrow(pc))
-
+      
       pc <- t(pc)
       
       pcaObj <- pca(pc, pdat, scale = TRUE, removeVar = 0.2)
-
     })
     
     output$screePlot <- renderPlot({
