@@ -197,8 +197,9 @@ pca_dat_server <- function(id, dat){
         pull()
       
       data_levels <- unique(data_available)
+      data_levels <- data_levels[order(data_levels)]
       
-      data_available <- factor(data_available,levels = data_levels)
+      data_available <- factor(data_levels,levels = data_levels)
       
       selectizeInput(inputId = ns("sampleOrderSelect"),
                      label = "Group Select / Order :", 
