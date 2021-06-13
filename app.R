@@ -229,10 +229,10 @@ ui <- dashboardPage(
                     box(
                         extractScatter_UI("wellChScatter"),
                         extractMeasurementColumns_UI("wellcolsScatter"),
-                        actionButton("WplotScatter", "Select Groups and Plot")
+                        actionButton("WplotScatter2", "Select Groups and Plot")
                     ),
                     fluidRow(
-                        scatter_plot_UI("wellTable")
+                        scatter_plot_UI("wellTableNorm")
                     )
             ),
             tabItem(tabName = "WpcaPlots",
@@ -777,7 +777,7 @@ server <- function(input, output, session) {
     # selected and filtered for the variables of interest. Calculate the normalised
     # values for all measures and columns of interest for the scatter plot
     # 
-    norm.well.table <- eventReactive(input$plotScatter, {
+    norm.well.table <- eventReactive(input$WplotScatter2, {
         scatter.test <- well.scat()
         
         ctrl <- scatter.test %>% 
