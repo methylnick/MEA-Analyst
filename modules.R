@@ -90,14 +90,12 @@ extractScatter_server <- function(id, dat){
         pull()
       
       data_levels <- unique(data_available)
-      
       data_levels <- data_levels[order(data_levels)]
-      
       data_levels <- factor(data_levels,levels = data_levels)
       
       selectizeInput(inputId = ns("sampleOrderSelect"),
                      label = "Group Select / Order :", 
-                     choices = data_available,
+                     choices = data_levels,
                      multiple = T, 
                      selected = NULL)
     })
@@ -231,10 +229,11 @@ pca_dat_server <- function(id, dat){
       
       pc <- pc %>% 
         filter(`Dose Label` %in% input$doseLabelSelect,
-               `Compound ID` %in% input$sampleOrderSelect)
+               `Compound ID` %in% input$sampleOrderSelect) %>% 
+        mutate(`Compound ID` = factor(`Compound ID`, levels = unique(`Compound ID`)))
       
       pdat <- pc %>% 
-        select(`Compound ID`:`Dose Label`) %>% 
+        select(`Compound ID`,`Dose Label`, plate) %>% 
         as.data.frame()
       
       pc <- pc %>%
@@ -311,29 +310,31 @@ scatter_plot_UI <- function(id) {
 ##################################
 # Server side actions ingests PCA object for plotting
 # Requires a yVarInput to select the appropriate y value for plotting
-scatter_plot_server <- function(id, dat, yvarInput){
+# 
+scatter_plot_server <- function(id, dat, yvarInput, actionIn){
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    plot <- reactive({
+      p <- dat 
+    })
       output$scatter_box <- renderPlotly({
-        ggplotly(
-          dat %>% 
-            ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
-                       x = `Compound ID`,
-                       col= `Compound ID`,
-                       label = `key3`,
-                       label2 = `plate`)) +
-            geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
-            geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
-            geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
-            theme_classic() +
-            labs(y=(yvarInput)) +
-            theme(
-              axis.text = element_text(size = input$text.size,face = "bold"),
-              axis.title = element_text(size = input$text.size*1.3,face = "bold"),
-              axis.title.x = element_blank(),
-              legend.position = "none"
-            )
-        )
+        ggplotly(plot() %>% 
+                   ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
+                              x = `Compound ID`,
+                              col= `Compound ID`,
+                              label = `key3`,
+                              label2 = `plate`)) +
+                   geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
+                   geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
+                   geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                   theme_classic() +
+                   labs(y=(yvarInput)) +
+                   theme(
+                     axis.text = element_text(size = input$text.size,face = "bold"),
+                     axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                     axis.title.x = element_blank(),
+                     legend.position = "none"
+                   ))
     })
   })
 }
