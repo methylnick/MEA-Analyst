@@ -342,21 +342,98 @@ scatter_plot_server <- function(id, dat, yvarInput, actionIn){
 ###############################################################################
 # Create a module to visualise the PCA plot and also tweak it's appearance as 
 # necessary with a particular data table going in
-# pca_plot_UI <- function(id) {
-#   
-# }
-
+read_testFile_UI <- function(id) {
+  ns <- NS(id)
+  fileInput(ns('file'), 'Load Treatment MEA File (UTF-8 .csv file)',
+            accept = c(
+              'text/csv',
+              'text/comma-separated-values',
+              '.csv'
+            ))
+}
 
 ##################################
-# Server side actions
+# Server side actions. Create a file reader so that files are read in and then
+# processed to extract the plate ID and set up of unique keys and maybe file
+# name too (for multiple files). Requires as input the dat file input, 
+# takes in the static inputs to remove inactive wells and at which threshold
+# @filter yes or no from UI
+# @filterLevel the slider level input
 #
-# pca_plot_server <- function(id, dat){
-#   moduleServer(id, function(input, output, session) {
-#     
-#   })
-# }
+read_testFile_server <- function(id, filter, filterLevel, readFile){
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    info <- eventReactive(readFile, {
+      inFile <- input$file
+      req(inFile)
+      f <- read_csv(inFile$datapath)
+      f <- f %>% 
+        filter(`Dose Label` != "Control") %>% # remove this data reading from drug 2 
+        mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
+        mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
+        mutate(key = paste0(`Channel ID`, "_",
+                            plate),
+               key2 = paste0(`Channel ID`, "_",
+                             `Dose Label`, "_", # need this for PCA
+                             plate),
+               key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% 
+        select(-`Active Channel`)
+      
+      ifelse(filter ==TRUE,
+             return(f %>% filter(`Spike Rate [Hz]` >= filterLevel)),
+             return(f))
+    }) 
 
+  })
+}
 
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+read_controlFile_UI <- function(id) {
+  ns <- NS(id)
+  fileInput(ns("file"), 'Load Control MEA File (UTF-8 .csv file)',
+            accept = c(
+              'text/csv',
+              'text/comma-separated-values',
+              '.csv'
+            ))
+}
+
+##################################
+# Server side actions. Create a file reader so that files are read in and then
+# processed to extract the plate ID and set up of unique keys and maybe file
+# name too (for multiple files). Requires as input the dat file input, 
+# takes in the static inputs to remove inactive wells and at which threshold
+# @filter yes or no from UI
+# @filterLevel the slider level input
+#
+read_controlFile_server <- function(id, filter, filterLevel, readFile){
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    info <- eventReactive(readFile, {
+      inFile <- input$file
+      req(inFile)
+      f <- read_csv(inFile$datapath)
+      f <- f %>% 
+        filter(`Dose Label` == "Control") %>% # remove this data reading from drug 2 
+        mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
+        mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
+        mutate(key = paste0(`Channel ID`, "_",
+                            plate),
+               key2 = paste0(`Channel ID`, "_",
+                             `Dose Label`, "_", # need this for PCA
+                             plate),
+               key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% 
+        select(-`Active Channel`)
+      
+      ifelse(filter ==TRUE,
+             return(f %>% filter(`Spike Rate [Hz]` >= filterLevel)),
+             return(f))
+    }) 
+    
+  })
+}
 
 ###############################################################################
 # Create a module to visualise the PCA plot and also tweak it's appearance as 

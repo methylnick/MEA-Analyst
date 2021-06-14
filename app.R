@@ -81,18 +81,8 @@ ui <- dashboardPage(
     dashboardBody(
         tabItems(
             tabItem(tabName = "dataIn",
-                    fluidRow(box(fileInput('file', 'Load Treatment MEA File (UTF-8 .csv file)',
-                                           accept = c(
-                                               'text/csv',
-                                               'text/comma-separated-values',
-                                               '.csv'
-                                           )),
-                                 fileInput('file.baseline', 'Load Baseline MEA File (UTF-8 .csv file)',
-                                           accept = c(
-                                               'text/csv',
-                                               'text/comma-separated-values',
-                                               '.csv'
-                                           )),
+                    fluidRow(box(read_testFile_UI("testIn"),
+                                 read_controlFile_UI("controlIn"),
                                  fileInput('spike.test', 'Load Treatment Spike Data (.zip file, compressed csv)',
                                            accept = '.zip'),
                                  fileInput('spike.baseline', 'Load Baseline Spike Data (.zip file, compressed csv)',
@@ -253,51 +243,15 @@ server <- function(input, output, session) {
     ###############################################################################
     options(shiny.maxRequestSize=30*1024^2)
     
-    ##############################################################################  
-    info <- eventReactive(input$choice, {
-        inFile <- input$file
-        req(inFile)
-        f <- read_csv(inFile$datapath)
-        f <- f %>% 
-            filter(`Dose Label` != "Control") %>% # remove this data reading from drug 2 
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% 
-            select(-`Active Channel`)
-        
-        ifelse(input$rm.inactive==TRUE,
-               return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level)),
-               return(f))
-    }) 
+    ##############################################################################
+    # Read in the test data file measurements
+    info <- read_testFile_server("testIn", filter = input$rm.inactive, 
+                                 filterLevel = input$sp.level, readFile = input$choice)
     
     ##############################################################################
-    # This is the baseline table and is set to either include or remove inactive
-    # channels
-    info.base <- eventReactive(input$choice, {
-        inFile <- input$file.baseline
-        req(inFile)
-        f <- read_csv(inFile$datapath)
-        f <- f %>% 
-            filter(`Dose Label` == "Control") %>% #select control data only
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% #set up channel ID and experiment
-            select(-`Active Channel`) 
-        
-        ifelse(input$rm.inactive.base==TRUE,
-               return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level.baseline)),
-               return(f))
-    }) 
+    # Read in the control data file measurements
+    info.base <- read_controlFile_server("controlIn", filter = input$rm.inactive.base, 
+                                         filterLevel = input$sp.level.baseline, readFile = input$choice)
     
     ##############################################################################
     # This is the baseline spike table
