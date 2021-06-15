@@ -83,10 +83,8 @@ ui <- dashboardPage(
             tabItem(tabName = "dataIn",
                     fluidRow(box(read_testFile_UI("testIn"),
                                  read_controlFile_UI("controlIn"),
-                                 fileInput('spike.test', 'Load Treatment Spike Data (.zip file, compressed csv)',
-                                           accept = '.zip'),
-                                 fileInput('spike.baseline', 'Load Baseline Spike Data (.zip file, compressed csv)',
-                                           accept = '.zip')
+                                 read_testSpike_UI("testSpike"),
+                                 read_controlSpike_UI("controlSpike")
                     ),
                     box(title = "Formatting and Filtering",
                         checkboxInput('rm.inactive', 'Remove inactive channels - Test', FALSE),
@@ -246,56 +244,28 @@ server <- function(input, output, session) {
     ##############################################################################
     # Read in the test data file measurements
     info <- read_testFile_server("testIn", filter = input$rm.inactive, 
-                                 filterLevel = input$sp.level, readFile = input$choice)
+                                 filterLevel = input$sp.level, 
+                                 readFile = input$choice)
     
     ##############################################################################
     # Read in the control data file measurements
     info.base <- read_controlFile_server("controlIn", filter = input$rm.inactive.base, 
-                                         filterLevel = input$sp.level.baseline, readFile = input$choice)
+                                         filterLevel = input$sp.level.baseline, 
+                                         readFile = input$choice)
     
     ##############################################################################
     # This is the baseline spike table
     # channels
-    sp.base <- eventReactive(input$choice, {
-        filter <- info.base()
-        
-        f <- read_csv(input$spike.baseline$datapath)
-        f <- f %>% 
-            filter(`Dose Label` == "Control") %>% #select control data only
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) #set up channel ID and experiment
-        ifelse(input$rm.inactive.base==TRUE,
-               return(f %>% filter(key %in% filter$key)),
-               return(f))
-    }) 
+    sp.test <- read_testSpike_server("testSpike", filterFile = info(), 
+                                     filter = input$rm.inactive, 
+                                     readFile = input$choice)
     
     ##############################################################################
     # This is the baseline table and is set to either include or remove inactive
     # channels
-    sp.test <- eventReactive(input$choice, {
-        filter <- info.base()
-        
-        f <- read_csv(input$spike.test$datapath)
-        f <- f %>% 
-            filter(`Dose Label` != "Control") %>% #select measurement data only
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) #set up channel ID and experiment
-        ifelse(input$rm.inactive.base==TRUE,
-               return(f %>% filter(key %in% filter$key)),
-               return(f))
-    }) 
+    sp.base <- read_controlSpike_server("controlSpike", filterFile = info.base(), 
+                                        filter = input$rm.inactive.base,
+                                        readFile = input$choice)
     
     ##############################################################################
     # Make a cleaned and filtered data table for downstream analysis and plotting 

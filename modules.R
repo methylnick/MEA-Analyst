@@ -438,6 +438,96 @@ read_controlFile_server <- function(id, filter, filterLevel, readFile){
 ###############################################################################
 # Create a module to visualise the PCA plot and also tweak it's appearance as 
 # necessary with a particular data table going in
+read_testSpike_UI <- function(id) {
+  ns <- NS(id)
+  fileInput(ns("spike.test"), 'Load Treatment Spike Data (.zip file, compressed csv)',
+            accept = '.zip')
+}
+
+##################################
+# Server side actions. Create a file reader so that files are read in and then
+# processed to extract the plate ID and set up of unique keys and maybe file
+# name too (for multiple files). Requires as input the dat file input, 
+# takes in the static inputs to remove inactive wells and at which threshold
+# @filterFile the filtered measurement file to extract the channels of interest
+# @filter use all the data or not filter yes or no
+#
+read_testSpike_server <- function(id, filterFile, filter, readFile){
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    info <- eventReactive(readFile, {
+      test <- filterFile
+      input <- input$spike.test
+      req(input)
+      f <- read_csv(input$datapath)
+      f <- f %>% 
+        filter(`Dose Label` != "Control") %>% #select test data only
+        mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
+        mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
+        mutate(key = paste0(`Channel ID`, "_",
+                            plate),
+               key2 = paste0(`Channel ID`, "_",
+                             `Dose Label`, "_", # need this for PCA
+                             plate),
+               key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) #set up channel ID and experiment
+      ifelse(filter==TRUE,
+             return(f %>% filter(key %in% test$key)),
+             return(f))
+
+    }) 
+    
+  })
+}
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+read_controlSpike_UI <- function(id) {
+  ns <- NS(id)
+  fileInput(ns("spike.baseline"), 'Load Baseline Spike Data (.zip file, compressed csv)',
+            accept = '.zip')
+}
+
+##################################
+# Server side actions. Create a file reader so that files are read in and then
+# processed to extract the plate ID and set up of unique keys and maybe file
+# name too (for multiple files). Requires as input the dat file input, 
+# takes in the static inputs to remove inactive wells and at which threshold
+# @filter yes or no from UI
+# @filterLevel the slider level input
+#
+read_controlSpike_server <- function(id, filterFile, filter, readFile){
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    info <- eventReactive(readFile, {
+      base <- filterFile
+      inFile <- input$spike.baseline
+      req(inFile)
+      f <- read_csv(inFile$datapath)
+      f <- f %>% 
+        filter(`Dose Label` == "Control") %>% # remove this data reading from drug 2 
+        mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
+        mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
+        mutate(key = paste0(`Channel ID`, "_",
+                            plate),
+               key2 = paste0(`Channel ID`, "_",
+                             `Dose Label`, "_", # need this for PCA
+                             plate),
+               key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`))
+      
+      ifelse(filter ==TRUE,
+             return(f %>% filter(key %in% base$key)),
+             return(f))
+    }) 
+    
+  })
+}
+
+
+
+###############################################################################
+# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# necessary with a particular data table going in
 # pca_plot_UI <- function(id) {
 #   
 # }
