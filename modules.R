@@ -307,7 +307,7 @@ scatter_plot_UI <- function(id) {
                     max = 30,
                     value = 6)
     ),
-    box(title = " - Raw Data", plotlyOutput(outputId = ns("scatter_box"))
+    box(title = "Scatter Plot", plotlyOutput(outputId = ns("scatter_box"))
     )
   )
 }
@@ -320,27 +320,28 @@ scatter_plot_UI <- function(id) {
 scatter_plot_server <- function(id, dat, yvarInput, actionIn){
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    plot <- reactive({
-      p <- dat 
+    plot <- eventReactive(actionIn, {
+                 p <- dat %>% 
+                      ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
+                                 x = `Compound ID`,
+                                 col= `Compound ID`,
+                                 label = `key3`,
+                                 label2 = `plate`)) +
+                      geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
+                      geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
+                      geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                      theme_classic() +
+                      labs(y=(yvarInput)) +
+                      theme(
+                        axis.text = element_text(size = input$text.size,face = "bold"),
+                        axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                        axis.title.x = element_blank(),
+                        legend.position = "none"
+                      )
     })
+    
       output$scatter_box <- renderPlotly({
-        ggplotly(plot() %>% 
-                   ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
-                              x = `Compound ID`,
-                              col= `Compound ID`,
-                              label = `key3`,
-                              label2 = `plate`)) +
-                   geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
-                   geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
-                   geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
-                   theme_classic() +
-                   labs(y=(yvarInput)) +
-                   theme(
-                     axis.text = element_text(size = input$text.size,face = "bold"),
-                     axis.title = element_text(size = input$text.size*1.3,face = "bold"),
-                     axis.title.x = element_blank(),
-                     legend.position = "none"
-                   ))
+        ggplotly(plot())
     })
   })
 }
