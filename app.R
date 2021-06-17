@@ -99,6 +99,8 @@ ui <- dashboardPage(
                                     min = 0,
                                     max = 10,
                                     value = 1),
+                        h4("Spike Data"),
+                        checkboxInput("includeSpike", "Include Spike Data Files", FALSE),
                         actionButton("choice", "Click To Import Data")
                     )
                     )
@@ -276,21 +278,27 @@ server <- function(input, output, session) {
     # inclusion into the PCA plots.
     # 
     spike.table <- eventReactive(input$choice, {
-        scatter.test <- sp.test()
-        ctrl <- sp.base()
+        if (input$includeSpike == TRUE) {
+            scatter.test <- sp.test()
+            ctrl <- sp.base()
+            
+            scatter.test <- scatter.test %>% 
+                filter(key %in% ctrl$key) 
+            
+            scatter.test <- bind_rows(scatter.test, ctrl)
+            
+            scatter.test <- scatter.test %>% 
+                group_by(key2) %>% 
+                summarize(mean_maxAmp_pV = mean(`Maximum Amplitude [pV]`), var_maxAmp_pV = var(`Maximum Amplitude [pV]`),
+                          mean_minAmp_pV = mean(`Minimum Amplitude [pV]`), var_minAmp_pV = var(`Minimum Amplitude [pV]`),
+                          mean_peakToPeak_pV = mean(`Peak-to-peak Amplitude [pV]`), 
+                          var_peakToPeak_pV = var(`Peak-to-peak Amplitude [pV]`)) %>% 
+                tibble()
+        } else {
+            NULL
+        }
         
-        scatter.test <- scatter.test %>% 
-            filter(key %in% ctrl$key) 
         
-        scatter.test <- bind_rows(scatter.test, ctrl)
-        
-        scatter.test <- scatter.test %>% 
-            group_by(key2) %>% 
-            summarize(mean_maxAmp_pV = mean(`Maximum Amplitude [pV]`), var_maxAmp_pV = var(`Maximum Amplitude [pV]`),
-                      mean_minAmp_pV = mean(`Minimum Amplitude [pV]`), var_minAmp_pV = var(`Minimum Amplitude [pV]`),
-                      mean_peakToPeak_pV = mean(`Peak-to-peak Amplitude [pV]`), 
-                      var_peakToPeak_pV = var(`Peak-to-peak Amplitude [pV]`)) %>% 
-            tibble()
         
     })
     
@@ -309,11 +317,26 @@ server <- function(input, output, session) {
         
         scatter.test <- bind_rows(scatter.test, ctrl)
         
-        scatter.test <- left_join(scatter.test, spike.test, by = "key2")
+        #insert check if we have spike data to include or not
+        if (input$includeSpike == TRUE){
+            scatter.test <- left_join(scatter.test, spike.test, by = "key2")
+        } else{
+            return(scatter.test)
+        }
         
-        scatter.test <- scatter.test %>% 
-            dplyr::select(`Channel ID`:`Dose Label`, plate:key3, `Spike Count`:`Mean Network Interburst Interval [µs]`,
-                          mean_maxAmp_pV:var_peakToPeak_pV)
+        #need to include test for spike data here too
+        
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                dplyr::select(`Channel ID`:`Dose Label`, plate:key3, `Spike Count`:`Mean Network Interburst Interval [µs]`,
+                              mean_maxAmp_pV:var_peakToPeak_pV)
+        } else {
+            scatter.test <- scatter.test %>% 
+                dplyr::select(`Channel ID`:`Dose Label`, plate:key3, 
+                              `Spike Count`:`Mean Network Interburst Interval [µs]`)
+        }
+
+        
     })
     
     ############################################################################## 
@@ -434,10 +457,21 @@ server <- function(input, output, session) {
         
         colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
         
-        scatter.test <- scatter.test %>% 
-            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
-                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
-            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        #need to incorporate an if statement here for the spike data for input$includeSpike
+        
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`var_peakToPeak_pV`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        } else {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`Mean Network Interburst Interval [µs].x`))
+        }
+    
+        
         
         scatter.test <- scatter.test %>% 
             dplyr::filter(`Dose Label` == scatterChannel$doseLabelSelect()) %>% 
@@ -606,7 +640,7 @@ server <- function(input, output, session) {
     
     ##############################################################################
     # PCA Plotting of tables generated
-    pca_dat_server(id = "uberTable", dat = scat.table())
+    pca_dat_server(id = "uberTable", dat = scat.table(), spikeIn = input$includeSpike)
     
     ##############################################################################
     # Create a normalised table of measurements from the uber table for the 
@@ -623,10 +657,19 @@ server <- function(input, output, session) {
         
         colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
         
-        scatter.test <- scatter.test %>% 
-            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
-                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
-            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        # need to include a test here for spike data input$includeSpike
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`var_peakToPeak_pV`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        } else {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`Mean Network Interburst Interval [µs].x`))
+        }
+        
         
         scatter.test <- scatter.test %>% 
             filter(`Dose Label` != "Control")
@@ -634,7 +677,7 @@ server <- function(input, output, session) {
     }) %>% 
         bindCache(scat.table())
     
-    pca_dat_server(id = "epiTable", dat = epi.table())
+    pca_dat_server(id = "epiTable", dat = epi.table(), spikeIn = input$includeSpike)
     
     ##############################################################################
     # Make a summarised table from the scatter.test which is by channel aggregate
@@ -645,16 +688,27 @@ server <- function(input, output, session) {
     well.scat <- reactive({
         dat <- scat.table()
         
-        dat <- dat %>% 
-            group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
-            summarise(across(`Spike Count`:var_peakToPeak_pV, list(mean = mean))) %>% 
-            tibble()
-        colnames(dat) <- gsub("_mean", "", colnames(dat))
-        dat
+        #need to include a test here for spike data
+        if (input$includeSpike == TRUE) {
+            dat <- dat %>% 
+                group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
+                summarise(across(`Spike Count`:var_peakToPeak_pV, list(mean = mean))) %>% 
+                tibble()
+            colnames(dat) <- gsub("_mean", "", colnames(dat))
+            return(dat)
+        } else {
+            dat <- dat %>% 
+                group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
+                summarise(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, list(mean = mean))) %>% 
+                tibble()
+            colnames(dat) <- gsub("_mean", "", colnames(dat))
+            return(dat)
+        }
+        
     }) %>% 
         bindCache(scat.table())
     
-    pca_dat_server(id = "wellTable", dat = well.scat())
+    pca_dat_server(id = "wellTable", dat = well.scat(), spikeIn = input$includeSpike)
     
     ##############################################################################
     # With the uber dataset, now create the data structure for plotting of the 
@@ -665,7 +719,7 @@ server <- function(input, output, session) {
         
     })
     
-    pca_dat_server(id = "epiWellTable", dat = well.uber())
+    pca_dat_server(id = "epiWellTable", dat = well.uber(), spikeIn = input$includeSpike)
     
     ############################################################################## 
     # Modularise selection columns extraction for 
@@ -718,10 +772,19 @@ server <- function(input, output, session) {
         
         colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
         
-        scatter.test <- scatter.test %>% 
-            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
-                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
-            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        # need to include test here for spike data input$includeSpike
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`var_peakToPeak_pV`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        } else {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`Mean Network Interburst Interval [µs].x`))
+        }
+        
     }) 
     
     norm.well.table <- reactive({

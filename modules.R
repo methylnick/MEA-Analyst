@@ -188,7 +188,7 @@ pca_dat_UI <- function(id) {
 ##################################
 # Server side actions for PCA
 #
-pca_dat_server <- function(id, dat){
+pca_dat_server <- function(id, dat, spikeIn){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
     output$sampOrder <- renderUI({
@@ -236,9 +236,15 @@ pca_dat_server <- function(id, dat){
         select(`Compound ID`,`Dose Label`, plate) %>% 
         as.data.frame()
       
-      pc <- pc %>%
-        select(`Spike Count`:var_peakToPeak_pV) %>%
-        as.matrix()
+      if (spikeIn == TRUE){
+        pc <- pc %>%
+          select(`Spike Count`:var_peakToPeak_pV) %>%
+          as.matrix()
+      } else {
+        pc <- pc %>%
+          select(`Spike Count`:`Mean Network Interburst Interval [µs]`) %>%
+          as.matrix()
+      }
       
       rownames(pc) <- seq(1:nrow(pc))
       
