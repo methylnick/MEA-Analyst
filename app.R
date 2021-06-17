@@ -730,7 +730,7 @@ server <- function(input, output, session) {
     ##############################################################################
     # With the uber dataset, now create the data structure for plotting of the 
     # scatter and PCA's after filtering
-    well.table <- eventReactive(input$WplotScatter, {
+    well.table <- reactive({
         
         scatter.test <- well.scat() %>% 
             dplyr::filter(`Dose Label` == wellScatChannel$doseLabelSelect()) %>% 
@@ -742,7 +742,7 @@ server <- function(input, output, session) {
     # Plot with the scatter module and give it a go
     
     scatter_plot_server(id = "wellTable", dat = well.table(), 
-                        yvarInput = wellScatCols(), actionIn = input$WplotScatter)
+                        yvarInput = wellScatCols())
     
     
     ############################################################################## 
@@ -757,7 +757,7 @@ server <- function(input, output, session) {
     # values for all measures and columns of interest for the scatter plot
     # 
     
-    n.well.table <- eventReactive(input$WplotScatter2, {
+    n.well.table <- reactive( {
         scatter.test <- well.scat()
         ## Create a key containing plate and well ID for merging with control and norm
         scatter.test <- scatter.test %>% 
@@ -800,7 +800,7 @@ server <- function(input, output, session) {
     # Plot with the scatter module and give it a go
     
     scatter_plot_server(id = "wellTableNorm", dat = norm.well.table(), 
-                        yvarInput = wellScatColsNorm(), actionIn = input$WplotScatter2)
+                        yvarInput = wellScatColsNorm())
     
     
 

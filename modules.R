@@ -317,10 +317,10 @@ scatter_plot_UI <- function(id) {
 # Server side actions ingests PCA object for plotting
 # Requires a yVarInput to select the appropriate y value for plotting
 # 
-scatter_plot_server <- function(id, dat, yvarInput, actionIn){
+scatter_plot_server <- function(id, dat, yvarInput){
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    plot <- eventReactive(actionIn, {
+    plot <- reactive({
                  p <- dat %>% 
                       ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
                                  x = `Compound ID`,
