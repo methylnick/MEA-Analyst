@@ -725,7 +725,11 @@ server <- function(input, output, session) {
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTable", dataIn = well.scat())
+    wellGroups <- extractScatter_server(id = "wellChScatter", dat = well.scat())
+    wellCols <- extractMeasurementColumns_server(id = "wellcolsScatter", dat = well.scat())
+    
+    scatter_plot_server(id = "wellTable", dataIn = well.scat(), groupIn = wellGroups(),
+                        colsIn = wellcols(), makePlot = input$WplotScatter)
     
     ##############################################################################
     # Create a normalised table of measurements from the uber well data that has been
@@ -766,7 +770,11 @@ server <- function(input, output, session) {
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTableNorm", dataIn = n.well.table())
+    wellGroupsN <- extractScatter_server(id = "wellChScatterNorm", dat = n.well.table())
+    wellColsN <- extractMeasurementColumns_server(id = "wellcolsScatterNorm", dat = n.well.table())
+    
+    scatter_plot_server(id = "wellTableNorm", dataIn = n.well.table(), groupIn = wellGroupsN(),
+                        colsIn = wellColsN(), makePlot = input$WplotScatter2)
 
     #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")
 }

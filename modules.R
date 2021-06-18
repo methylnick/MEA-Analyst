@@ -285,11 +285,6 @@ pca_dat_server <- function(id, dat, spikeIn){
 scatter_plot_UI <- function(id) {
   ns <- NS(id)
   tagList(
-    box(title = "Select Groups",
-        extractScatter_UI(ns("extractGroups")),
-        extractMeasurementColumns_UI(ns("extractColumns")),
-        actionButton(ns("makePlot"), "Set groups and make plot")
-    ),
     box(title = "Tweaks to the Charts",
         sliderInput(inputId = ns("point.size"),step = 0.5,
                     label = "Point Size :",
@@ -320,26 +315,24 @@ scatter_plot_UI <- function(id) {
 
 ##################################
 # Server side actions ingests PCA object for plotting
-# Requires a yVarInput to select the appropriate y value for plotting
-# 
-scatter_plot_server <- function(id, dataIn){
+# Requires variables from other modules which have extracted from table
+# Include dose label and sample orders. 
+#
+scatter_plot_server <- function(id, dataIn, groupIn, colsIn, makePlot){
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
-    x <- extractScatter_server(id = ns("extractGroups"), dat = dataIn)
-    y <- extractMeasurementColumns_server(id = ns("extractColumns"), dat = dataIn)
     
     well.table <- reactive({
       
       scatter.test <- dataIn %>% 
-        dplyr::filter(`Dose Label` == x$doseLabelSelect()) %>% 
-        dplyr::filter(`Compound ID` %in% x$sampleOrder()) %>% 
-        mutate(`Compound ID` := factor(`Compound ID`, levels = x$sampleOrder()))
+        dplyr::filter(`Dose Label` == groupIn$doseLabelSelect()) %>% 
+        dplyr::filter(`Compound ID` %in% groupIn$sampleOrder()) %>% 
+        mutate(`Compound ID` := factor(`Compound ID`, levels = groupIn$sampleOrder()))
     }) 
     
-    plot <- eventReactive(input$makePlot, {
+    plot <- eventReactive(makePlot, {
                  p <- well.table() %>% 
-                      ggplot(aes(y = !!rlang::sym(y()), #### server output
+                      ggplot(aes(y = !!rlang::sym(colsIn()), #### server output
                                  x = `Compound ID`,
                                  col= `Compound ID`,
                                  label = `key3`,
