@@ -285,6 +285,11 @@ pca_dat_server <- function(id, dat, spikeIn){
 scatter_plot_UI <- function(id) {
   ns <- NS(id)
   tagList(
+    box(title = "Select Groups",
+        extractScatter_UI(ns("extractGroups")),
+        extractMeasurementColumns_UI(ns("extractColumns")),
+        actionButton(ns("makePlot"), "Set groups and make plot")
+    ),
     box(title = "Tweaks to the Charts",
         sliderInput(inputId = ns("point.size"),step = 0.5,
                     label = "Point Size :",
@@ -317,12 +322,24 @@ scatter_plot_UI <- function(id) {
 # Server side actions ingests PCA object for plotting
 # Requires a yVarInput to select the appropriate y value for plotting
 # 
-scatter_plot_server <- function(id, dat, yvarInput){
+scatter_plot_server <- function(id, dataIn){
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    plot <- reactive({
-                 p <- dat %>% 
-                      ggplot(aes(y = !!rlang::sym(yvarInput), #### server output
+    
+    x <- extractScatter_server(id = ns("extractGroups"), dat = dataIn)
+    y <- extractMeasurementColumns_server(id = ns("extractColumns"), dat = dataIn)
+    
+    well.table <- reactive({
+      
+      scatter.test <- dataIn %>% 
+        dplyr::filter(`Dose Label` == x$doseLabelSelect()) %>% 
+        dplyr::filter(`Compound ID` %in% x$sampleOrder()) %>% 
+        mutate(`Compound ID` := factor(`Compound ID`, levels = x$sampleOrder()))
+    }) 
+    
+    plot <- eventReactive(input$makePlot, {
+                 p <- well.table() %>% 
+                      ggplot(aes(y = !!rlang::sym(y()), #### server output
                                  x = `Compound ID`,
                                  col= `Compound ID`,
                                  label = `key3`,
@@ -331,7 +348,7 @@ scatter_plot_server <- function(id, dat, yvarInput){
                       geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
                       geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
                       theme_classic() +
-                      labs(y=(yvarInput)) +
+                      labs(y=(y())) +
                       theme(
                         axis.text = element_text(size = input$text.size,face = "bold"),
                         axis.title = element_text(size = input$text.size*1.3,face = "bold"),

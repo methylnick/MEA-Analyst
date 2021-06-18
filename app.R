@@ -721,35 +721,11 @@ server <- function(input, output, session) {
     
     pca_dat_server(id = "epiWellTable", dat = well.uber(), spikeIn = input$includeSpike)
     
-    ############################################################################## 
-    # Modularise selection columns extraction for 
-    # graphs then extract out the value for plotting
-    wellScatChannel <- extractScatter_server(id = "wellChScatter", dat = well.scat())
-    wellScatCols <- extractMeasurementColumns_server(id = "wellcolsScatter", dat = well.scat())
-    
-    ##############################################################################
-    # With the uber dataset, now create the data structure for plotting of the 
-    # scatter and PCA's after filtering
-    well.table <- reactive({
-        
-        scatter.test <- well.scat() %>% 
-            dplyr::filter(`Dose Label` == wellScatChannel$doseLabelSelect()) %>% 
-            dplyr::filter(`Compound ID` %in% wellScatChannel$sampleOrder()) %>% 
-            mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannel$sampleOrder()))
-    }) 
     
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTable", dat = well.table(), 
-                        yvarInput = wellScatCols())
-    
-    
-    ############################################################################## 
-    # Modularise selection columns extraction for 
-    # graphs then extract out the value for plotting
-    wellScatChannelNorm <- extractScatter_server(id = "wellChScatterNorm", dat = well.scat())
-    wellScatColsNorm <- extractMeasurementColumns_server(id = "wellcolsScatterNorm", dat = well.scat())
+    scatter_plot_server(id = "wellTable", dataIn = well.scat())
     
     ##############################################################################
     # Create a normalised table of measurements from the uber well data that has been
@@ -787,22 +763,10 @@ server <- function(input, output, session) {
         
     }) 
     
-    norm.well.table <- reactive({
-        
-        scatter.test <- n.well.table() %>% 
-            dplyr::filter(`Dose Label` == wellScatChannelNorm$doseLabelSelect()) %>% 
-            dplyr::filter(`Compound ID` %in% wellScatChannelNorm$sampleOrder()) %>% 
-            mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannelNorm$sampleOrder()))
-        
-    }) 
-    
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTableNorm", dat = norm.well.table(), 
-                        yvarInput = wellScatColsNorm())
-    
-    
+    scatter_plot_server(id = "wellTableNorm", dataIn = n.well.table())
 
     #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")
 }
