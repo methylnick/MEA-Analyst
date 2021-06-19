@@ -285,6 +285,12 @@ pca_dat_server <- function(id, dat, spikeIn){
 scatter_plot_UI <- function(id) {
   ns <- NS(id)
   tagList(
+    box(title = "Select Features to Plot",
+        uiOutput(ns("doseLabel")),
+        uiOutput(ns("sampOrder")),
+        uiOutput(ns("datTable")),
+        actionButton(ns("makePlot"), "Select Features and Plot")
+    ),
     box(title = "Tweaks to the Charts",
         sliderInput(inputId = ns("point.size"),step = 0.5,
                     label = "Point Size :",
@@ -318,30 +324,73 @@ scatter_plot_UI <- function(id) {
 # Requires variables from other modules which have extracted from table
 # Include dose label and sample orders. 
 #
-scatter_plot_server <- function(id, dataIn, groupIn, colsIn, makePlot){
+scatter_plot_server <- function(id, dataIn){
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    well.table <- reactive({
+    output$datTable <- renderUI({
+      ns <- session$ns
+      coi <- dataIn %>% 
+        dplyr::select(where(is.numeric))
+      cols <- colnames(coi)
       
-      scatter.test <- dataIn %>% 
-        dplyr::filter(`Dose Label` == groupIn$doseLabelSelect()) %>% 
-        dplyr::filter(`Compound ID` %in% groupIn$sampleOrder()) %>% 
-        mutate(`Compound ID` := factor(`Compound ID`, levels = groupIn$sampleOrder()))
-    }) 
+      selectInput(
+        ns("dat"),
+        "Select measurement to plot:",
+        choices = cols,
+        selected = "Spike Count",
+        multiple = FALSE
+      )
+    })
     
-    plot <- eventReactive(makePlot, {
+    output$sampOrder <- renderUI({
+      data_available <- dataIn %>% 
+        select(`Compound ID`) %>% 
+        pull()
+      
+      data_levels <- unique(data_available)
+      data_levels <- data_levels[order(data_levels)]
+      data_levels <- factor(data_levels,levels = data_levels)
+      
+      selectizeInput(inputId = ns("sampleOrderSelect"),
+                     label = "Group Select / Order :", 
+                     choices = data_levels,
+                     multiple = T, 
+                     selected = NULL)
+    })
+    output$doseLabel <- renderUI({
+      data_available <- dataIn %>% 
+        select(`Dose Label`) %>% 
+        distinct() %>% 
+        pull()
+      
+      data_available <- unique(data_available)
+      
+      selectInput(inputId = ns("doseLabelSelect"),
+                  label = "Select Dose Group :", 
+                  choices = data_available,
+                  multiple = F, 
+                  selected = NULL)
+    })
+    
+    well.table <- eventReactive(input$makePlot, {
+      scatter.test <- dataIn %>% 
+        dplyr::filter(`Dose Label` == input$doseLabelSelect) %>% 
+        dplyr::filter(`Compound ID` %in% input$sampleOrderSelect) %>% 
+        mutate(`Compound ID` := factor(`Compound ID`, levels = input$sampleOrderSelect))
+    })
+    
+    plot <- reactive({
                  p <- well.table() %>% 
-                      ggplot(aes(y = !!rlang::sym(colsIn()), #### server output
+                      ggplot(aes(y = !!rlang::sym(input$dat), #### server output
                                  x = `Compound ID`,
-                                 col= `Compound ID`,
-                                 label = `key3`,
-                                 label2 = `plate`)) +
+                                 col= `Compound ID`)) +
                       geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
                       geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
                       geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
                       theme_classic() +
-                      labs(y=(y())) +
+                      ggtitle(input$doseLabelSelect) +
+                      labs(y = input$dat) +
                       theme(
                         axis.text = element_text(size = input$text.size,face = "bold"),
                         axis.title = element_text(size = input$text.size*1.3,face = "bold"),

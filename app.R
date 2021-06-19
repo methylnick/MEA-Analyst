@@ -122,8 +122,7 @@ ui <- dashboardPage(
                     fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
                     fluidRow(h3("Uber Table"), displayDT_ui("u.table")),
                     fluidRow(h3("Normalised Uber Table"), displayDT_ui("n.u.table")),
-                    fluidRow(h3("Epi Table"), displayDT_ui("e.table")),
-                    fluidRow(h3("Well normalised Table"), displayDT_ui("w.scat"))
+                    fluidRow(h3("Epi Table"), displayDT_ui("e.table"))
             ),
             tabItem(tabName = "plots",
                     title = "Histogram Plots",
@@ -205,25 +204,11 @@ ui <- dashboardPage(
                     ),
             tabItem(tabName = "WscatPlots",
                     title = "Scatter Plots - Raw",
-                        box(
-                            extractScatter_UI("wellChScatter"),
-                            extractMeasurementColumns_UI("wellcolsScatter"),
-                            actionButton("WplotScatter", "Select Groups and Plot")
-                        ),
-                    fluidRow(
-                    scatter_plot_UI("wellTable")
-                    )
+                    scatter_plot_UI("wellTableScat")
             ),
             tabItem(tabName = "WscatPlotsNorm",
                     title = "Scatter Plots - Normalised",
-                    box(
-                        extractScatter_UI("wellChScatterNorm"),
-                        extractMeasurementColumns_UI("wellcolsScatterNorm"),
-                        actionButton("WplotScatter2", "Select Groups and Plot")
-                    ),
-                    fluidRow(
-                        scatter_plot_UI("wellTableNorm")
-                    )
+                    scatter_plot_UI("wellTableNorm")
             ),
             tabItem(tabName = "WpcaPlots",
                     title = "PCA Plot",
@@ -352,7 +337,8 @@ server <- function(input, output, session) {
     displayDT_server(id ="n.u.table", dat = norm.uber.table())    # all variables normalised to control
     displayDT_server(id ="n.table.out", dat = norm.table.out())   # selected variable for table output
     displayDT_server(id ="e.table", dat = epi.table())     # epileptiform table (normalised for PCA)
-    displayDT_server(id ="w.scat", dat = well.scat())      # well average table
+    # displayDT_server(id ="w.scat", dat = wscat$table())      # well average table
+    # displayDT_server(id ="w.scat.norm", dat = wscatnorm$table() )
 
     ############################################################################## 
     # Lets try and modularise measurement column extraction for selection in 
@@ -725,11 +711,7 @@ server <- function(input, output, session) {
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    wellGroups <- extractScatter_server(id = "wellChScatter", dat = well.scat())
-    wellCols <- extractMeasurementColumns_server(id = "wellcolsScatter", dat = well.scat())
-    
-    scatter_plot_server(id = "wellTable", dataIn = well.scat(), groupIn = wellGroups(),
-                        colsIn = wellcols(), makePlot = input$WplotScatter)
+    wscat <- scatter_plot_server(id = "wellTableScat", dataIn = well.scat())
     
     ##############################################################################
     # Create a normalised table of measurements from the uber well data that has been
@@ -769,12 +751,8 @@ server <- function(input, output, session) {
     
     ##############################################################################
     # Plot with the scatter module and give it a go
-    
-    wellGroupsN <- extractScatter_server(id = "wellChScatterNorm", dat = n.well.table())
-    wellColsN <- extractMeasurementColumns_server(id = "wellcolsScatterNorm", dat = n.well.table())
-    
-    scatter_plot_server(id = "wellTableNorm", dataIn = n.well.table(), groupIn = wellGroupsN(),
-                        colsIn = wellColsN(), makePlot = input$WplotScatter2)
+
+    wnormscat <- scatter_plot_server(id = "wellTableNorm", dataIn = n.well.table())
 
     #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")
 }
