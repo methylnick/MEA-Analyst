@@ -81,22 +81,10 @@ ui <- dashboardPage(
     dashboardBody(
         tabItems(
             tabItem(tabName = "dataIn",
-                    fluidRow(box(fileInput('file', 'Load Treatment MEA File (UTF-8 .csv file)',
-                                           accept = c(
-                                               'text/csv',
-                                               'text/comma-separated-values',
-                                               '.csv'
-                                           )),
-                                 fileInput('file.baseline', 'Load Baseline MEA File (UTF-8 .csv file)',
-                                           accept = c(
-                                               'text/csv',
-                                               'text/comma-separated-values',
-                                               '.csv'
-                                           )),
-                                 fileInput('spike.test', 'Load Treatment Spike Data (.zip file, compressed csv)',
-                                           accept = '.zip'),
-                                 fileInput('spike.baseline', 'Load Baseline Spike Data (.zip file, compressed csv)',
-                                           accept = '.zip')
+                    fluidRow(box(read_testFile_UI("testIn"),
+                                 read_controlFile_UI("controlIn"),
+                                 read_testSpike_UI("testSpike"),
+                                 read_controlSpike_UI("controlSpike")
                     ),
                     box(title = "Formatting and Filtering",
                         checkboxInput('rm.inactive', 'Remove inactive channels - Test', FALSE),
@@ -111,6 +99,8 @@ ui <- dashboardPage(
                                     min = 0,
                                     max = 10,
                                     value = 1),
+                        h4("Spike Data"),
+                        checkboxInput("includeSpike", "Include Spike Data Files", FALSE),
                         actionButton("choice", "Click To Import Data")
                     )
                     )
@@ -132,8 +122,7 @@ ui <- dashboardPage(
                     fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
                     fluidRow(h3("Uber Table"), displayDT_ui("u.table")),
                     fluidRow(h3("Normalised Uber Table"), displayDT_ui("n.u.table")),
-                    fluidRow(h3("Epi Table"), displayDT_ui("e.table")),
-                    fluidRow(h3("Well normalised Table"), displayDT_ui("w.scat"))
+                    fluidRow(h3("Epi Table"), displayDT_ui("e.table"))
             ),
             tabItem(tabName = "plots",
                     title = "Histogram Plots",
@@ -215,25 +204,11 @@ ui <- dashboardPage(
                     ),
             tabItem(tabName = "WscatPlots",
                     title = "Scatter Plots - Raw",
-                        box(
-                            extractScatter_UI("wellChScatter"),
-                            extractMeasurementColumns_UI("wellcolsScatter"),
-                            actionButton("WplotScatter", "Select Groups and Plot")
-                        ),
-                    fluidRow(
-                    scatter_plot_UI("wellTable")
-                    )
+                    scatter_plot_UI("wellTableScat")
             ),
             tabItem(tabName = "WscatPlotsNorm",
                     title = "Scatter Plots - Normalised",
-                    box(
-                        extractScatter_UI("wellChScatterNorm"),
-                        extractMeasurementColumns_UI("wellcolsScatterNorm"),
-                        actionButton("WplotScatter2", "Select Groups and Plot")
-                    ),
-                    fluidRow(
-                        scatter_plot_UI("wellTableNorm")
-                    )
+                    scatter_plot_UI("wellTableNorm")
             ),
             tabItem(tabName = "WpcaPlots",
                     title = "PCA Plot",
@@ -253,95 +228,31 @@ server <- function(input, output, session) {
     ###############################################################################
     options(shiny.maxRequestSize=30*1024^2)
     
-    ##############################################################################  
-    info <- eventReactive(input$choice, {
-        inFile <- input$file
-        req(inFile)
-        f <- read_csv(inFile$datapath)
-        f <- f %>% 
-            filter(`Dose Label` != "Control") %>% # remove this data reading from drug 2 
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% 
-            select(-`Active Channel`)
-        
-        ifelse(input$rm.inactive==TRUE,
-               return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level)),
-               return(f))
-    }) 
+    ##############################################################################
+    # Read in the test data file measurements
+    info <- read_testFile_server("testIn", filter = input$rm.inactive, 
+                                 filterLevel = input$sp.level, 
+                                 readFile = input$choice)
     
     ##############################################################################
-    # This is the baseline table and is set to either include or remove inactive
-    # channels
-    info.base <- eventReactive(input$choice, {
-        inFile <- input$file.baseline
-        req(inFile)
-        f <- read_csv(inFile$datapath)
-        f <- f %>% 
-            filter(`Dose Label` == "Control") %>% #select control data only
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) %>% #set up channel ID and experiment
-            select(-`Active Channel`) 
-        
-        ifelse(input$rm.inactive.base==TRUE,
-               return(f %>% filter(`Spike Rate [Hz]` >= input$sp.level.baseline)),
-               return(f))
-    }) 
+    # Read in the control data file measurements
+    info.base <- read_controlFile_server("controlIn", filter = input$rm.inactive.base, 
+                                         filterLevel = input$sp.level.baseline, 
+                                         readFile = input$choice)
     
     ##############################################################################
     # This is the baseline spike table
     # channels
-    sp.base <- eventReactive(input$choice, {
-        filter <- info.base()
-        
-        f <- read_csv(input$spike.baseline$datapath)
-        f <- f %>% 
-            filter(`Dose Label` == "Control") %>% #select control data only
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) #set up channel ID and experiment
-        ifelse(input$rm.inactive.base==TRUE,
-               return(f %>% filter(key %in% filter$key)),
-               return(f))
-    }) 
+    sp.test <- read_testSpike_server("testSpike", filterFile = info(), 
+                                     filter = input$rm.inactive, 
+                                     readFile = input$choice)
     
     ##############################################################################
     # This is the baseline table and is set to either include or remove inactive
     # channels
-    sp.test <- eventReactive(input$choice, {
-        filter <- info.base()
-        
-        f <- read_csv(input$spike.test$datapath)
-        f <- f %>% 
-            filter(`Dose Label` != "Control") %>% #select measurement data only
-            mutate(plate = str_extract(Experiment, "_[0-9][0-9][0-9][0-9]_")) %>% #Extract plate ID
-            mutate(plate = as.numeric(gsub("_", "", plate))) %>% # reformat to numeric
-            mutate(key = paste0(`Channel ID`, "_",
-                                plate),
-                   key2 = paste0(`Channel ID`, "_",
-                                 `Dose Label`, "_", # need this for PCA
-                                 plate),
-                   key3 = paste0(plate, "_", `Well ID`, "_", `Dose Label`)) #set up channel ID and experiment
-        ifelse(input$rm.inactive.base==TRUE,
-               return(f %>% filter(key %in% filter$key)),
-               return(f))
-    }) 
+    sp.base <- read_controlSpike_server("controlSpike", filterFile = info.base(), 
+                                        filter = input$rm.inactive.base,
+                                        readFile = input$choice)
     
     ##############################################################################
     # Make a cleaned and filtered data table for downstream analysis and plotting 
@@ -352,21 +263,27 @@ server <- function(input, output, session) {
     # inclusion into the PCA plots.
     # 
     spike.table <- eventReactive(input$choice, {
-        scatter.test <- sp.test()
-        ctrl <- sp.base()
+        if (input$includeSpike == TRUE) {
+            scatter.test <- sp.test()
+            ctrl <- sp.base()
+            
+            scatter.test <- scatter.test %>% 
+                filter(key %in% ctrl$key) 
+            
+            scatter.test <- bind_rows(scatter.test, ctrl)
+            
+            scatter.test <- scatter.test %>% 
+                group_by(key2) %>% 
+                summarize(mean_maxAmp_pV = mean(`Maximum Amplitude [pV]`), var_maxAmp_pV = var(`Maximum Amplitude [pV]`),
+                          mean_minAmp_pV = mean(`Minimum Amplitude [pV]`), var_minAmp_pV = var(`Minimum Amplitude [pV]`),
+                          mean_peakToPeak_pV = mean(`Peak-to-peak Amplitude [pV]`), 
+                          var_peakToPeak_pV = var(`Peak-to-peak Amplitude [pV]`)) %>% 
+                tibble()
+        } else {
+            NULL
+        }
         
-        scatter.test <- scatter.test %>% 
-            filter(key %in% ctrl$key) 
         
-        scatter.test <- bind_rows(scatter.test, ctrl)
-        
-        scatter.test <- scatter.test %>% 
-            group_by(key2) %>% 
-            summarize(mean_maxAmp_pV = mean(`Maximum Amplitude [pV]`), var_maxAmp_pV = var(`Maximum Amplitude [pV]`),
-                      mean_minAmp_pV = mean(`Minimum Amplitude [pV]`), var_minAmp_pV = var(`Minimum Amplitude [pV]`),
-                      mean_peakToPeak_pV = mean(`Peak-to-peak Amplitude [pV]`), 
-                      var_peakToPeak_pV = var(`Peak-to-peak Amplitude [pV]`)) %>% 
-            tibble()
         
     })
     
@@ -385,11 +302,26 @@ server <- function(input, output, session) {
         
         scatter.test <- bind_rows(scatter.test, ctrl)
         
-        scatter.test <- left_join(scatter.test, spike.test, by = "key2")
+        #insert check if we have spike data to include or not
+        if (input$includeSpike == TRUE){
+            scatter.test <- left_join(scatter.test, spike.test, by = "key2")
+        } else{
+            return(scatter.test)
+        }
         
-        scatter.test <- scatter.test %>% 
-            dplyr::select(`Channel ID`:`Dose Label`, plate:key3, `Spike Count`:`Mean Network Interburst Interval [µs]`,
-                          mean_maxAmp_pV:var_peakToPeak_pV)
+        #need to include test for spike data here too
+        
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                dplyr::select(`Channel ID`:`Dose Label`, plate:key3, `Spike Count`:`Mean Network Interburst Interval [µs]`,
+                              mean_maxAmp_pV:var_peakToPeak_pV)
+        } else {
+            scatter.test <- scatter.test %>% 
+                dplyr::select(`Channel ID`:`Dose Label`, plate:key3, 
+                              `Spike Count`:`Mean Network Interburst Interval [µs]`)
+        }
+
+        
     })
     
     ############################################################################## 
@@ -405,7 +337,8 @@ server <- function(input, output, session) {
     displayDT_server(id ="n.u.table", dat = norm.uber.table())    # all variables normalised to control
     displayDT_server(id ="n.table.out", dat = norm.table.out())   # selected variable for table output
     displayDT_server(id ="e.table", dat = epi.table())     # epileptiform table (normalised for PCA)
-    displayDT_server(id ="w.scat", dat = well.scat())      # well average table
+    # displayDT_server(id ="w.scat", dat = wscat$table())      # well average table
+    # displayDT_server(id ="w.scat.norm", dat = wscatnorm$table() )
 
     ############################################################################## 
     # Lets try and modularise measurement column extraction for selection in 
@@ -510,10 +443,21 @@ server <- function(input, output, session) {
         
         colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
         
-        scatter.test <- scatter.test %>% 
-            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
-                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
-            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        #need to incorporate an if statement here for the spike data for input$includeSpike
+        
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`var_peakToPeak_pV`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        } else {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`Mean Network Interburst Interval [µs].x`))
+        }
+    
+        
         
         scatter.test <- scatter.test %>% 
             dplyr::filter(`Dose Label` == scatterChannel$doseLabelSelect()) %>% 
@@ -682,7 +626,7 @@ server <- function(input, output, session) {
     
     ##############################################################################
     # PCA Plotting of tables generated
-    pca_dat_server(id = "uberTable", dat = scat.table())
+    pca_dat_server(id = "uberTable", dat = scat.table(), spikeIn = input$includeSpike)
     
     ##############################################################################
     # Create a normalised table of measurements from the uber table for the 
@@ -699,10 +643,19 @@ server <- function(input, output, session) {
         
         colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
         
-        scatter.test <- scatter.test %>% 
-            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
-                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
-            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        # need to include a test here for spike data input$includeSpike
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`var_peakToPeak_pV`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        } else {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`Mean Network Interburst Interval [µs].x`))
+        }
+        
         
         scatter.test <- scatter.test %>% 
             filter(`Dose Label` != "Control")
@@ -710,7 +663,7 @@ server <- function(input, output, session) {
     }) %>% 
         bindCache(scat.table())
     
-    pca_dat_server(id = "epiTable", dat = epi.table())
+    pca_dat_server(id = "epiTable", dat = epi.table(), spikeIn = input$includeSpike)
     
     ##############################################################################
     # Make a summarised table from the scatter.test which is by channel aggregate
@@ -721,16 +674,27 @@ server <- function(input, output, session) {
     well.scat <- reactive({
         dat <- scat.table()
         
-        dat <- dat %>% 
-            group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
-            summarise(across(`Spike Count`:var_peakToPeak_pV, list(mean = mean))) %>% 
-            tibble()
-        colnames(dat) <- gsub("_mean", "", colnames(dat))
-        dat
+        #need to include a test here for spike data
+        if (input$includeSpike == TRUE) {
+            dat <- dat %>% 
+                group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
+                summarise(across(`Spike Count`:var_peakToPeak_pV, list(mean = mean))) %>% 
+                tibble()
+            colnames(dat) <- gsub("_mean", "", colnames(dat))
+            return(dat)
+        } else {
+            dat <- dat %>% 
+                group_by(key3,`Dose Label`, `Compound ID`, plate) %>% 
+                summarise(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, list(mean = mean))) %>% 
+                tibble()
+            colnames(dat) <- gsub("_mean", "", colnames(dat))
+            return(dat)
+        }
+        
     }) %>% 
         bindCache(scat.table())
     
-    pca_dat_server(id = "wellTable", dat = well.scat())
+    pca_dat_server(id = "wellTable", dat = well.scat(), spikeIn = input$includeSpike)
     
     ##############################################################################
     # With the uber dataset, now create the data structure for plotting of the 
@@ -741,37 +705,13 @@ server <- function(input, output, session) {
         
     })
     
-    pca_dat_server(id = "epiWellTable", dat = well.uber())
+    pca_dat_server(id = "epiWellTable", dat = well.uber(), spikeIn = input$includeSpike)
     
-    ############################################################################## 
-    # Modularise selection columns extraction for 
-    # graphs then extract out the value for plotting
-    wellScatChannel <- extractScatter_server(id = "wellChScatter", dat = well.scat())
-    wellScatCols <- extractMeasurementColumns_server(id = "wellcolsScatter", dat = well.scat())
-    
-    ##############################################################################
-    # With the uber dataset, now create the data structure for plotting of the 
-    # scatter and PCA's after filtering
-    well.table <- eventReactive(input$WplotScatter, {
-        
-        scatter.test <- well.scat() %>% 
-            dplyr::filter(`Dose Label` == wellScatChannel$doseLabelSelect()) %>% 
-            dplyr::filter(`Compound ID` %in% wellScatChannel$sampleOrder()) %>% 
-            mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannel$sampleOrder()))
-    }) 
     
     ##############################################################################
     # Plot with the scatter module and give it a go
     
-    scatter_plot_server(id = "wellTable", dat = well.table(), 
-                        yvarInput = wellScatCols(), actionIn = input$WplotScatter)
-    
-    
-    ############################################################################## 
-    # Modularise selection columns extraction for 
-    # graphs then extract out the value for plotting
-    wellScatChannelNorm <- extractScatter_server(id = "wellChScatterNorm", dat = well.scat())
-    wellScatColsNorm <- extractMeasurementColumns_server(id = "wellcolsScatterNorm", dat = well.scat())
+    wscat <- scatter_plot_server(id = "wellTableScat", dataIn = well.scat())
     
     ##############################################################################
     # Create a normalised table of measurements from the uber well data that has been
@@ -779,7 +719,7 @@ server <- function(input, output, session) {
     # values for all measures and columns of interest for the scatter plot
     # 
     
-    n.well.table <- eventReactive(input$WplotScatter2, {
+    n.well.table <- reactive( {
         scatter.test <- well.scat()
         ## Create a key containing plate and well ID for merging with control and norm
         scatter.test <- scatter.test %>% 
@@ -794,28 +734,25 @@ server <- function(input, output, session) {
         
         colnames(scatter.test) <- gsub("\\.y", "", colnames(scatter.test))
         
-        scatter.test <- scatter.test %>% 
-            mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
-                          ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
-            select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
-    }) 
-    
-    norm.well.table <- reactive({
-        
-        scatter.test <- n.well.table() %>% 
-            dplyr::filter(`Dose Label` == wellScatChannelNorm$doseLabelSelect()) %>% 
-            dplyr::filter(`Compound ID` %in% wellScatChannelNorm$sampleOrder()) %>% 
-            mutate(`Compound ID` := factor(`Compound ID`, levels = wellScatChannelNorm$sampleOrder()))
+        # need to include test here for spike data input$includeSpike
+        if (input$includeSpike == TRUE) {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`var_peakToPeak_pV`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`var_peakToPeak_pV.x`))
+        } else {
+            scatter.test <- scatter.test %>% 
+                mutate(across(`Spike Count`:`Mean Network Interburst Interval [µs]`, 
+                              ~ .x / scatter.test[[paste0(cur_column(), ".x")]] * 100)) %>% 
+                select(-(`Spike Count.x`:`Mean Network Interburst Interval [µs].x`))
+        }
         
     }) 
     
     ##############################################################################
     # Plot with the scatter module and give it a go
-    
-    scatter_plot_server(id = "wellTableNorm", dat = norm.well.table(), 
-                        yvarInput = wellScatColsNorm(), actionIn = input$WplotScatter2)
-    
-    
+
+    wnormscat <- scatter_plot_server(id = "wellTableNorm", dataIn = n.well.table())
 
     #cat(file=stderr(), "This is the object emitted from dat server", class(pca.uber$rotated()), "\n")
 }
