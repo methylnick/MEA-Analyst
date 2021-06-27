@@ -13,6 +13,7 @@ library(ggalt)
 library(plotly)
 library(shinydashboard)
 library(colourpicker)
+library(shinycssloaders)
 
 # Source Modules here
 source("modules.R")
@@ -108,21 +109,30 @@ ui <- dashboardPage(
             ),
             tabItem(tabName = "loadedTables",
                     title = "Tables Loaded and Ready to Plot",
-                    fluidRow(h3("Test - MEA file"), displayDT_ui("test")),
-                    fluidRow(h3("Baseline - MEA file"), displayDT_ui("base"))
+                    fluidRow(h3("Test - MEA file"), 
+                             withSpinner(displayDT_ui("test"), type = 6)),
+                    fluidRow(h3("Baseline - MEA file"), 
+                             withSpinner(displayDT_ui("base"), type = 6))
             ),
             tabItem(tabName = "spikeTables",
                     title = "Spike Data Tables Loaded",
-                    fluidRow(h3("Test Spike Data"), displayDT_ui("s.test")),
-                    fluidRow(h3("Baseline Spike Data"), displayDT_ui("s.base"))
+                    fluidRow(h3("Test Spike Data"), 
+                             withSpinner(displayDT_ui("s.test"), type = 6)),
+                    fluidRow(h3("Baseline Spike Data"), 
+                             withSpinner(displayDT_ui("s.base"), type = 6))
             ),
             tabItem(tabName = "spikeTablesMean",
                     title = "Calculated Data Tables for App",
-                    fluidRow(h3("Summarised Spike Table"), displayDT_ui("s.table")),
-                    fluidRow(h3("Table for Scatter Plots"), displayDT_ui("sc.table")),
-                    fluidRow(h3("Uber Table"), displayDT_ui("u.table")),
-                    fluidRow(h3("Normalised Uber Table"), displayDT_ui("n.u.table")),
-                    fluidRow(h3("Epi Table"), displayDT_ui("e.table"))
+                    fluidRow(h3("Summarised Spike Table"), 
+                             withSpinner(displayDT_ui("s.table"), type = 6)),
+                    fluidRow(h3("Table for Scatter Plots"), 
+                             withSpinner(displayDT_ui("sc.table"), type = 6)),
+                    fluidRow(h3("Uber Table"), 
+                             withSpinner(displayDT_ui("u.table"), type = 6)),
+                    fluidRow(h3("Normalised Uber Table"), 
+                             withSpinner(displayDT_ui("n.u.table"), type = 6)),
+                    fluidRow(h3("Epi Table"), 
+                             withSpinner(displayDT_ui("e.table"), type = 6))
             ),
             tabItem(tabName = "plots",
                     title = "Histogram Plots",
