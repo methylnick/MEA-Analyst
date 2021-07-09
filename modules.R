@@ -179,7 +179,7 @@ pca_dat_UI <- function(id) {
           ),
       box(
         plotOutput(ns("pcaPlot"))
-          )
+         )
     )
   )
 }
@@ -258,7 +258,7 @@ pca_dat_server <- function(id, dat, spikeIn){
     })
     
     output$pcaPlot <- renderPlot({
-      biplot(pcaDat(),
+      PCAtools::biplot(pcaDat(),
              showLoadings = input$pca.loadings,
              ntopLoadings = input$pca.n.loadings,
              lab = NULL, 
@@ -270,7 +270,7 @@ pca_dat_server <- function(id, dat, spikeIn){
              encircleLineSize = input$pca.circle.line,
              encircleLineCol = "black",
              ellipse = input$pca.ellipse,
-             ellipseConf = input$pca.ellipse.conf,
+             ellipseLevel = input$pca.ellipse.conf,
              ellipseFill = input$pca.ellipse,
              ellipseLineSize = input$pca.circle.line)
       
