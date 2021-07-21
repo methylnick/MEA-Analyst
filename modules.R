@@ -299,7 +299,7 @@ pca_dat_server <- function(id, dat, spikeIn){
                          lab = NULL, 
                          legendPosition = "right", 
                          colby = "mergedFactor", 
-                         # shape = "Dose Label",
+                         shape = "Dose Label",
                          encircle = input$pca.circle, 
                          encircleFill = input$pca.circle,
                          encircleLineSize = input$pca.circle.line,
