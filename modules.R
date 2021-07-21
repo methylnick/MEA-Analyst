@@ -144,6 +144,12 @@ pca_dat_UI <- function(id) {
       uiOutput(ns("doseLabel")),
       uiOutput(ns("sampOrder")),
       h3("Circle Configuration"),
+      checkboxInput(inputId = ns("circleDrugs"),
+                    "Circle Compound ID?",
+                    FALSE),
+      checkboxInput(inputId = ns("mergeFactors"),
+                    "Merge Compound ID and Dose Label Factors? (Select and hit replot)",
+                    FALSE),
       checkboxInput(inputId = ns("pca.circle"),
                     "Draw circles",
                     FALSE),
@@ -227,14 +233,26 @@ pca_dat_server <- function(id, dat, spikeIn){
       pc <- dat %>%
         mutate(across(everything(), ~replace_na(.x, 0)))
       
-      pc <- pc %>% 
-        filter(`Dose Label` %in% input$doseLabelSelect,
-               `Compound ID` %in% input$sampleOrderSelect) %>% 
-        mutate(`Compound ID` = factor(`Compound ID`, levels = unique(`Compound ID`)))
-      
-      pdat <- pc %>% 
-        select(`Compound ID`,`Dose Label`, plate) %>% 
-        as.data.frame()
+      if (input$mergeFactors == TRUE) {
+        pc <- pc %>% 
+          filter(`Dose Label` %in% input$doseLabelSelect,
+                 `Compound ID` %in% input$sampleOrderSelect) %>% 
+          mutate(`Compound ID` = factor(`Compound ID`, levels = unique(`Compound ID`))) %>% 
+          mutate(mergedFactor = paste0(`Compound ID`, "_", `Dose Label`))
+        
+        pdat <- pc %>% 
+          select(mergedFactor, `Compound ID`,`Dose Label`, plate) %>% 
+          as.data.frame()
+      } else {
+        pc <- pc %>% 
+          filter(`Dose Label` %in% input$doseLabelSelect,
+                 `Compound ID` %in% input$sampleOrderSelect) %>% 
+          mutate(`Compound ID` = factor(`Compound ID`, levels = unique(`Compound ID`)))
+        
+        pdat <- pc %>% 
+          select(`Compound ID`,`Dose Label`, plate) %>% 
+          as.data.frame()
+      }
       
       if (spikeIn == TRUE){
         pc <- pc %>%
@@ -258,21 +276,55 @@ pca_dat_server <- function(id, dat, spikeIn){
     })
     
     output$pcaPlot <- renderPlot({
-      PCAtools::biplot(pcaDat(),
-             showLoadings = input$pca.loadings,
-             ntopLoadings = input$pca.n.loadings,
-             lab = NULL, 
-             legendPosition = "right", 
-             colby = "Dose Label", 
-             shape = "Compound ID",
-             encircle = input$pca.circle, 
-             encircleFill = input$pca.circle,
-             encircleLineSize = input$pca.circle.line,
-             encircleLineCol = "black",
-             ellipse = input$pca.ellipse,
-             ellipseLevel = input$pca.ellipse.conf,
-             ellipseFill = input$pca.ellipse,
-             ellipseLineSize = input$pca.circle.line)
+      if (input$circleDrugs == TRUE) {
+        PCAtools::biplot(pcaDat(),
+                         showLoadings = input$pca.loadings,
+                         ntopLoadings = input$pca.n.loadings,
+                         lab = NULL, 
+                         legendPosition = "right", 
+                         colby = "Compound ID", 
+                         shape = "Dose Label",
+                         encircle = input$pca.circle, 
+                         encircleFill = input$pca.circle,
+                         encircleLineSize = input$pca.circle.line,
+                         encircleLineCol = "black",
+                         ellipse = input$pca.ellipse,
+                         ellipseLevel = input$pca.ellipse.conf,
+                         ellipseFill = input$pca.ellipse,
+                         ellipseLineSize = input$pca.circle.line)
+      } else if (input$mergeFactors == TRUE) {
+        PCAtools::biplot(pcaDat(),
+                         showLoadings = input$pca.loadings,
+                         ntopLoadings = input$pca.n.loadings,
+                         lab = NULL, 
+                         legendPosition = "right", 
+                         colby = "mergedFactor", 
+                         # shape = "Dose Label",
+                         encircle = input$pca.circle, 
+                         encircleFill = input$pca.circle,
+                         encircleLineSize = input$pca.circle.line,
+                         encircleLineCol = "black",
+                         ellipse = input$pca.ellipse,
+                         ellipseLevel = input$pca.ellipse.conf,
+                         ellipseFill = input$pca.ellipse,
+                         ellipseLineSize = input$pca.circle.line)
+      } else{
+        PCAtools::biplot(pcaDat(),
+                         showLoadings = input$pca.loadings,
+                         ntopLoadings = input$pca.n.loadings,
+                         lab = NULL, 
+                         legendPosition = "right", 
+                         colby = "Dose Label", 
+                         shape = "Compound ID",
+                         encircle = input$pca.circle, 
+                         encircleFill = input$pca.circle,
+                         encircleLineSize = input$pca.circle.line,
+                         encircleLineCol = "black",
+                         ellipse = input$pca.ellipse,
+                         ellipseLevel = input$pca.ellipse.conf,
+                         ellipseFill = input$pca.ellipse,
+                         ellipseLineSize = input$pca.circle.line)
+      }
       
     })
   })
