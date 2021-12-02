@@ -335,7 +335,7 @@ pca_dat_server <- function(id, dat, spikeIn){
 
 
 ###############################################################################
-# Create a module to visualise the PCA plot and also tweak it's appearance as 
+# Create a module to visualise the scatter plot and also tweak it's appearance as 
 # necessary with a particular data table going in
 scatter_plot_UI <- function(id) {
   ns <- NS(id)
@@ -441,8 +441,8 @@ scatter_plot_server <- function(id, dataIn){
                                  x = `Compound ID`,
                                  col= `Compound ID`)) +
                       geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
-                      geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
-                      geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                      geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.2) +
+                      geom_boxplot(show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
                       theme_classic() +
                       ggtitle(input$doseLabelSelect) +
                       labs(y = input$dat) +
@@ -459,6 +459,261 @@ scatter_plot_server <- function(id, dataIn){
     })
   })
 }
+
+###############################################################################
+# Create a module to visualise the scatter plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+scatter_plot_UI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    box(title = "Select Features to Plot",
+        uiOutput(ns("doseLabel")),
+        uiOutput(ns("sampOrder")),
+        uiOutput(ns("datTable")),
+        actionButton(ns("makePlot"), "Select Features and Plot")
+    ),
+    box(title = "Tweaks to the Charts",
+        sliderInput(inputId = ns("point.size"),step = 0.5,
+                    label = "Point Size :",
+                    min = 0,
+                    max = 8,
+                    value = 3),
+        sliderInput(inputId = ns("box.width"),step = 0.05,
+                    label = "Box Width :",
+                    min = 0.05,
+                    max = 0.8,
+                    value = 0.5),
+        sliderInput(inputId = ns("ylim.rel"),step = 100,
+                    label = "y limit %Rel :",
+                    min = 200,
+                    max = 2000,
+                    value = 800),
+        sliderInput(inputId = ns("text.size"),step = 1,
+                    label = "Text Size :",
+                    min = 0,
+                    max = 30,
+                    value = 6)
+    ),
+    box(title = "Scatter Plot", plotlyOutput(outputId = ns("scatter_box"))
+    )
+  )
+}
+
+
+##################################
+# Server side actions ingests PCA object for plotting
+# Requires variables from other modules which have extracted from table
+# Include dose label and sample orders. 
+#
+scatter_plot_server <- function(id, dataIn){
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    
+    output$datTable <- renderUI({
+      ns <- session$ns
+      coi <- dataIn %>% 
+        dplyr::select(where(is.numeric))
+      cols <- colnames(coi)
+      
+      selectInput(
+        ns("dat"),
+        "Select measurement to plot:",
+        choices = cols,
+        selected = "Spike Count",
+        multiple = FALSE
+      )
+    })
+    
+    output$sampOrder <- renderUI({
+      data_available <- dataIn %>% 
+        select(`Compound ID`) %>% 
+        pull()
+      
+      data_levels <- unique(data_available)
+      data_levels <- data_levels[order(data_levels)]
+      data_levels <- factor(data_levels,levels = data_levels)
+      
+      selectizeInput(inputId = ns("sampleOrderSelect"),
+                     label = "Group Select / Order :", 
+                     choices = data_levels,
+                     multiple = T, 
+                     selected = NULL)
+    })
+    output$doseLabel <- renderUI({
+      data_available <- dataIn %>% 
+        select(`Dose Label`) %>% 
+        distinct() %>% 
+        pull()
+      
+      data_available <- unique(data_available)
+      
+      selectInput(inputId = ns("doseLabelSelect"),
+                  label = "Select Dose Group :", 
+                  choices = data_available,
+                  multiple = F, 
+                  selected = NULL)
+    })
+    
+    well.table <- eventReactive(input$makePlot, {
+      scatter.test <- dataIn %>% 
+        dplyr::filter(`Dose Label` == input$doseLabelSelect) %>% 
+        dplyr::filter(`Compound ID` %in% input$sampleOrderSelect) %>% 
+        mutate(`Compound ID` := factor(`Compound ID`, levels = input$sampleOrderSelect))
+    })
+    
+    plot <- reactive({
+                 p <- well.table() %>% 
+                      ggplot(aes(y = !!rlang::sym(input$dat), #### server output
+                                 x = `Compound ID`,
+                                 col= `Compound ID`)) +
+                      geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
+                      geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.2) +
+                      geom_boxplot(show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                      theme_classic() +
+                      ggtitle(input$doseLabelSelect) +
+                      labs(y = input$dat) +
+                      theme(
+                        axis.text = element_text(size = input$text.size,face = "bold"),
+                        axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+                        axis.title.x = element_blank(),
+                        legend.position = "none"
+                      )
+    })
+    
+      output$scatter_box <- renderPlotly({
+        ggplotly(plot())
+    })
+  })
+}
+
+###############################################################################
+# Create a module to visualise the static scatter plot and also tweak it's appearance as 
+# necessary with a particular data table going in
+scatstat_plot_UI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    box(title = "Select Features to Plot",
+        uiOutput(ns("doseLabel")),
+        uiOutput(ns("sampOrder")),
+        uiOutput(ns("datTable")),
+        actionButton(ns("makePlot"), "Select Features and Plot")
+    ),
+    box(title = "Tweaks to the Charts",
+        sliderInput(inputId = ns("point.size"),step = 0.5,
+                    label = "Point Size :",
+                    min = 0,
+                    max = 8,
+                    value = 3),
+        sliderInput(inputId = ns("box.width"),step = 0.05,
+                    label = "Box Width :",
+                    min = 0.05,
+                    max = 0.8,
+                    value = 0.5),
+        sliderInput(inputId = ns("ylim.rel"),step = 100,
+                    label = "y limit %Rel :",
+                    min = 200,
+                    max = 2000,
+                    value = 800),
+        sliderInput(inputId = ns("text.size"),step = 1,
+                    label = "Text Size :",
+                    min = 0,
+                    max = 30,
+                    value = 6)
+    ),
+    box(title = "Scatter Plot", plotlyOutput(outputId = ns("scatter_box"))
+    )
+  )
+}
+
+
+##################################
+# Server side actions ingests object for static scatter plotting
+# Requires variables from other modules which have extracted from table
+# Include dose label and sample orders. 
+#
+scatstat_plot_server <- function(id, dataIn){
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    
+    output$datTable <- renderUI({
+      ns <- session$ns
+      coi <- dataIn %>% 
+        dplyr::select(where(is.numeric))
+      cols <- colnames(coi)
+      
+      selectInput(
+        ns("dat"),
+        "Select measurement to plot:",
+        choices = cols,
+        selected = "Spike Count",
+        multiple = FALSE
+      )
+    })
+    
+    output$sampOrder <- renderUI({
+      data_available <- dataIn %>% 
+        select(`Compound ID`) %>% 
+        pull()
+      
+      data_levels <- unique(data_available)
+      data_levels <- data_levels[order(data_levels)]
+      data_levels <- factor(data_levels,levels = data_levels)
+      
+      selectizeInput(inputId = ns("sampleOrderSelect"),
+                     label = "Group Select / Order :", 
+                     choices = data_levels,
+                     multiple = T, 
+                     selected = NULL)
+    })
+    output$doseLabel <- renderUI({
+      data_available <- dataIn %>% 
+        select(`Dose Label`) %>% 
+        distinct() %>% 
+        pull()
+      
+      data_available <- unique(data_available)
+      
+      selectInput(inputId = ns("doseLabelSelect"),
+                  label = "Select Dose Group :", 
+                  choices = data_available,
+                  multiple = F, 
+                  selected = NULL)
+    })
+    
+    well.table <- eventReactive(input$makePlot, {
+      scatter.test <- dataIn %>% 
+        dplyr::filter(`Dose Label` == input$doseLabelSelect) %>% 
+        dplyr::filter(`Compound ID` %in% input$sampleOrderSelect) %>% 
+        mutate(`Compound ID` := factor(`Compound ID`, levels = input$sampleOrderSelect))
+    })
+    
+    plot <- reactive({
+      p <- well.table() %>% 
+        ggplot(aes(y = !!rlang::sym(input$dat), #### server output
+                   x = `Compound ID`,
+                   col= `Compound ID`)) +
+        geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
+        geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.2) +
+        geom_boxplot(show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+        theme_classic() +
+        ggtitle(input$doseLabelSelect) +
+        labs(y = input$dat) +
+        theme(
+          axis.text = element_text(size = input$text.size,face = "bold"),
+          axis.title = element_text(size = input$text.size*1.3,face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none"
+        )
+    })
+    
+    output$scatter_box <- renderPlot({
+      plot()
+    })
+  })
+}
+
+
+
 
 ###############################################################################
 # Create a module to visualise the PCA plot and also tweak it's appearance as 
@@ -645,23 +900,179 @@ read_controlSpike_server <- function(id, filterFile, filter, readFile){
 }
 
 
-
 ###############################################################################
-# Create a module to visualise the PCA plot and also tweak it's appearance as 
-# necessary with a particular data table going in
-# pca_plot_UI <- function(id) {
-#   
-# }
+# Create a module to wrangle a data table for downstream dendrogram clustering
+# The idea being that the signal within each of the clusters at least by PCA
+# are related.
+# This is another way to plot clusters and distances
+dend_dat_UI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    fluidRow(
+      box(
+        h3("Select Groups and Treatments"),
+        uiOutput(ns("doseLabel")),
+        uiOutput(ns("sampOrder")),
+        h3("Circle Configuration"),
+        checkboxInput(inputId = ns("mergeFactors"),
+                      "Merge Compound ID and Dose Label Factors?",
+                      FALSE),
+        helpText("Select this and replot the PCA. This will combine Compound ID and Dose Label",
+                 " together and circles will be drawn around these."),
+        actionButton(ns("processPCA"), "Select Groups and Plot Dendrogram")
+      ),
+    ),
+    fluidRow(
+      box(
+        plotOutput(ns("dendPlot"))
+      ),
+      box(
+        plotOutput(ns("dend2Plot"))
+      )
+    )
+  )
+}
 
 
 ##################################
-# Server side actions
+# Server side actions for dend plotting
 #
-# pca_plot_server <- function(id, dat){
-#   moduleServer(id, function(input, output, session) {
-#     
-#   })
-# }
+dend_dat_server <- function(id, dat, spikeIn){
+  moduleServer(id, function(input, output, session){
+    ns <- session$ns
+    output$sampOrder <- renderUI({
+      data_available <- dat %>% 
+        select(`Compound ID`) %>% 
+        pull()
+      
+      data_levels <- unique(data_available)
+      data_levels <- data_levels[order(data_levels)]
+      
+      data_available <- factor(data_levels,levels = data_levels)
+      
+      selectizeInput(inputId = ns("sampleOrderSelect"),
+                     label = "Group Select / Order :", 
+                     choices = data_available,
+                     multiple = T, 
+                     selected = NULL)
+    })
+    
+    output$doseLabel <- renderUI({
+      data_available <- dat %>% 
+        select(`Dose Label`) %>% 
+        distinct() %>% 
+        pull()
+      
+      data_available <- unique(data_available)
+      
+      selectizeInput(inputId = ns("doseLabelSelect"),
+                     label = "Select Dose Group :", 
+                     choices = data_available,
+                     multiple = T, 
+                     selected = data_available[1:2])
+    })
+    
+    dendDat <- eventReactive(input$processDend, {
+      pc <- dat %>%
+        mutate(across(everything(), ~replace_na(.x, 0)))
+      
+      if (input$mergeFactors == TRUE) {
+        pc <- pc %>% 
+          filter(`Dose Label` %in% input$doseLabelSelect,
+                 `Compound ID` %in% input$sampleOrderSelect) %>% 
+          mutate(`Compound ID` = factor(`Compound ID`, levels = unique(`Compound ID`))) %>% 
+          mutate(mergedFactor = paste0(`Compound ID`, "_", `Dose Label`))
+        
+        pdat <- pc %>% 
+          select(mergedFactor, `Compound ID`,`Dose Label`, plate) %>% 
+          as.data.frame()
+      } else {
+        pc <- pc %>% 
+          filter(`Dose Label` %in% input$doseLabelSelect,
+                 `Compound ID` %in% input$sampleOrderSelect) %>% 
+          mutate(`Compound ID` = factor(`Compound ID`, levels = unique(`Compound ID`)))
+        
+        pdat <- pc %>% 
+          select(`Compound ID`,`Dose Label`, plate) %>% 
+          as.data.frame()
+      }
+      
+      if (spikeIn == TRUE){
+        pc <- pc %>%
+          select(`Spike Count`:var_peakToPeak_pV) %>%
+          as.matrix()
+      } else {
+        pc <- pc %>%
+          select(`Spike Count`:`Mean Network Interburst Interval [µs]`) %>%
+          as.matrix()
+      }
+      
+      rownames(pc) <- seq(1:nrow(pc))
+      
+      pc <- t(pc)
+      
+      dendObj <- hclust(dist(pc))
+    })
+    
+    output$dendPlot <- renderPlot({
+      ggdendrogram(pcaDat())
+    })
+    
+    output$pcaPlot <- renderPlot({
+      if (input$circleDrugs == TRUE) {
+        PCAtools::biplot(pcaDat(),
+                         showLoadings = input$pca.loadings,
+                         ntopLoadings = input$pca.n.loadings,
+                         lab = NULL, 
+                         legendPosition = "right", 
+                         colby = "Compound ID", 
+                         shape = "Dose Label",
+                         encircle = input$pca.circle, 
+                         encircleFill = input$pca.circle,
+                         encircleLineSize = input$pca.circle.line,
+                         encircleLineCol = "black",
+                         ellipse = input$pca.ellipse,
+                         ellipseLevel = input$pca.ellipse.conf,
+                         ellipseFill = input$pca.ellipse,
+                         ellipseLineSize = input$pca.circle.line)
+      } else if (input$mergeFactors == TRUE) {
+        PCAtools::biplot(pcaDat(),
+                         showLoadings = input$pca.loadings,
+                         ntopLoadings = input$pca.n.loadings,
+                         lab = NULL, 
+                         legendPosition = "right", 
+                         colby = "mergedFactor", 
+                         shape = "Dose Label",
+                         encircle = input$pca.circle, 
+                         encircleFill = input$pca.circle,
+                         encircleLineSize = input$pca.circle.line,
+                         encircleLineCol = "black",
+                         ellipse = input$pca.ellipse,
+                         ellipseLevel = input$pca.ellipse.conf,
+                         ellipseFill = input$pca.ellipse,
+                         ellipseLineSize = input$pca.circle.line)
+      } else{
+        PCAtools::biplot(pcaDat(),
+                         showLoadings = input$pca.loadings,
+                         ntopLoadings = input$pca.n.loadings,
+                         lab = NULL, 
+                         legendPosition = "right", 
+                         colby = "Dose Label", 
+                         shape = "Compound ID",
+                         encircle = input$pca.circle, 
+                         encircleFill = input$pca.circle,
+                         encircleLineSize = input$pca.circle.line,
+                         encircleLineCol = "black",
+                         ellipse = input$pca.ellipse,
+                         ellipseLevel = input$pca.ellipse.conf,
+                         ellipseFill = input$pca.ellipse,
+                         ellipseLineSize = input$pca.circle.line)
+      }
+      
+    })
+  })
+}
+
 
 
 

@@ -14,6 +14,8 @@ library(plotly)
 library(shinydashboard)
 library(colourpicker)
 library(shinycssloaders)
+library(ggdendro)
+library(dendextend)
 
 # Source Modules here
 source("modules.R")
@@ -48,7 +50,10 @@ ui <- dashboardPage(
                     "Histogram Plots", tabName = "plots", icon = icon("chart-bar")
                 ),
                 menuSubItem(
-                    "Scatter Plots", tabName = "scatPlots", icon = icon("braille")
+                    "Scatter Plots - interactive", tabName = "scatPlots", icon = icon("braille")
+                ),
+                menuSubItem(
+                    "Dendrogram Plot", tabName = "scatStatPlots", icon = icon("network-wired")
                 ),
                 menuSubItem(
                     "PCA Plots", tabName = "pcaPlots", icon = icon("blackberry")
@@ -175,16 +180,29 @@ ui <- dashboardPage(
                                     label = "Text Size :",
                                     min = 0,
                                     max = 30,
-                                    value = 6),
-                        downloadButton("downloadData", "Download Normalised Data")
+                                    value = 6)
                     )
                     
                     ),
-                    fluidRow(box(title = " - Raw Data", plotlyOutput(outputId = "scatter_box")),
-                             box(title = " - Relative to Baseline ( % ) - 'jitter'", plotlyOutput(outputId = "scatter_box_rel"))
+                    fluidRow(box(title = "Raw Data", plotlyOutput(outputId = "scatter_box")),
+                             box(title = "Relative to Baseline ( % ) - 'jitter'", plotlyOutput(outputId = "scatter_box_rel"))
                     ),
-                    fluidRow(box(title =" - Relative to Baseline ( % ) - 'beeswarm'", plotlyOutput(outputId = "swarm_box_rel")),
-                             box(displayDT_ui("n.table.out"))
+                    fluidRow(box(title ="Relative to Baseline ( % ) - 'beeswarm'", plotlyOutput(outputId = "swarm_box_rel")),
+                             box(displayDT_ui("n.table.out"),
+                                 downloadButton("downloadData", "Download Normalised Data"))
+                    )
+                    
+            ),
+            tabItem(tabName = "scatStatPlots",
+                    outputId = "scatStat_box_text",
+                    fluidRow(box(title = "Scatter Plot Configuration",
+                                 extractScatter_UI("channelDend"),
+                                 extractMeasurementColumns_UI("colsDend"),
+                                 actionButton("plotDend", "Select Groups and Plot")
+                    )
+                    
+                    ),
+                    fluidRow(box(title = "Dendrogram Plot", plotOutput(outputId = "dendrogram"))
                     )
                     
             ),
@@ -346,7 +364,9 @@ server <- function(input, output, session) {
     displayDT_server(id ="sc.table", dat = scat.table())          # raw data table for downstream wrangling
     displayDT_server(id ="n.u.table", dat = norm.uber.table())    # all variables normalised to control
     displayDT_server(id ="n.table.out", dat = norm.table.out())   # selected variable for table output
+    displayDT_server(id ="scatStat.table.out", dat = norm.table.out())
     displayDT_server(id ="e.table", dat = epi.table())     # epileptiform table (normalised for PCA)
+    # displayDT_server(id ="dend.table", dat = dendObject())     # epileptiform table (normalised for PCA)
     # displayDT_server(id ="w.scat", dat = wscat$table())      # well average table
     # displayDT_server(id ="w.scat.norm", dat = wscatnorm$table() )
 
@@ -397,6 +417,8 @@ server <- function(input, output, session) {
     # graphs then extract out the value for plotting
     scatterChannel <- extractScatter_server(id = "channelScatter", dat = scat.table())
     scatterCols <- extractMeasurementColumns_server(id = "colsScatter", dat = scat.table())
+    dendChannel <- extractScatter_server(id = "channelDend", dat = scat.table())
+    dendCols <- extractMeasurementColumns_server(id = "colsDend", dat = scat.table())
     
     ##############################################################################
     # With the uber dataset, now create the data structure for plotting of the 
@@ -407,6 +429,16 @@ server <- function(input, output, session) {
             dplyr::filter(`Dose Label` == scatterChannel$doseLabelSelect()) %>% 
             dplyr::filter(`Compound ID` %in% scatterChannel$sampleOrder()) %>% 
             mutate(`Compound ID` := factor(`Compound ID`, levels = scatterChannel$sampleOrder()))
+        
+        return(scatter.test)
+    })
+    
+    uber.table2 <- eventReactive(input$plotDend, {
+        
+        scatter.test <- scat.table() %>% 
+            dplyr::filter(`Dose Label` == dendChannel$doseLabelSelect()) %>% 
+            dplyr::filter(`Compound ID` %in% dendChannel$sampleOrder()) %>% 
+            mutate(`Compound ID` := factor(`Compound ID`, levels = dendChannel$sampleOrder()))
         
         return(scatter.test)
     })
@@ -425,8 +457,8 @@ server <- function(input, output, session) {
                            label3 = `Well ID`,
                            label4 = plate)) +
                 geom_hline(yintercept = 0, alpha=0.5,linetype=2) +
-                geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
-                geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.2) +
+                geom_boxplot(alpha = 0.9, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8, outlier.colour = "white") +
                 theme_classic() +
                 labs(y=(scatterCols())) +
                 theme(
@@ -437,6 +469,36 @@ server <- function(input, output, session) {
                 )
         )
     })
+    
+    
+    ##############################################################################
+    # Create a dendrogram object by channel
+    # From the object, create a dist object for dendrogram plotting
+    
+    dendObject <- reactive({
+        dat <- uber.table2() %>% 
+            select(`Spike Count`:`Mean Network Interburst Interval [µs]`) %>% 
+            as.data.frame()
+        
+        metaDat <- uber.table2() %>% 
+            select(`Channel ID`:`Dose Label`)
+        
+        #dat <- t(dat)
+        #colnames(dat) <- metaDat$`Channel ID`
+        
+        dat <- dist(dat)
+        
+        dat <- hclust(dat)
+        
+        return(dat)
+    })
+    
+    output$dendrogram <- renderPlot({
+        
+        ggdendrogram(dendObject())
+        
+    })
+    
     
     ##############################################################################
     # Create a normalised table of measurements from the uber table that has been
@@ -490,8 +552,8 @@ server <- function(input, output, session) {
                            label3 = `Well ID`,
                            label4 = plate)) +
                 geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
-                geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.9) +
-                geom_boxplot(alpha = 0.5, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8) +
+                geom_jitter(position=position_jitter(width=0.3, height=0.2),size=input$point.size, alpha=0.2) +
+                geom_boxplot(alpha = 0.9, show.legend = FALSE,col="black",width=input$box.width,lwd=0.8, outlier.colour = "white") +
                 theme_classic() +
                 labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
                 theme(axis.text = element_text(size = input$text.size,face = "bold"),
@@ -516,7 +578,8 @@ server <- function(input, output, session) {
                            label4 = plate)) +
                 geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
                 geom_beeswarm(priority = c("ascending"),size=input$point.size, alpha=0.5,cex = 0.8, groupOnX = TRUE) +
-                geom_boxplot(alpha = 0.6, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8) +
+                geom_boxplot(alpha = 0.6, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8, 
+                             outlier.colour = "white") +
                 theme_classic() +
                 labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
                 theme(axis.text = element_text(size = input$text.size,face = "bold"),
@@ -540,7 +603,7 @@ server <- function(input, output, session) {
     # Export the normalised table for visualisation
     output$downloadData <- downloadHandler(
         filename = function() {
-            paste0(Sys.Date(), "_", !!rlang::sym(scatterCols()), "_normalised", ".csv")
+            paste0(Sys.Date(), "_", scatterCols(), "_normalised", ".csv")
         },
         content = function(file) {
             write.csv(norm.table.out(), file, row.names = FALSE)
@@ -568,8 +631,8 @@ server <- function(input, output, session) {
         ggplot(dat, aes_string(y = str_replace((scatterCols()), " ", "_"), x = "Compound_ID",
                                col= "Compound_ID")) +
             geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
-            geom_beeswarm(priority = c("ascending"),size=input$point.size, alpha=0.5,cex = 0.8) +
-            geom_boxplot(alpha = 0.6, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8) +
+            geom_beeswarm(priority = c("ascending"),size=input$point.size, alpha=0.5,cex = 0.2) +
+            geom_boxplot(alpha = 0.9, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8, outlier.colour = "white") +
             theme_classic() +
             labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
             theme(
