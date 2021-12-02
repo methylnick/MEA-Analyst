@@ -198,11 +198,10 @@ ui <- dashboardPage(
                     fluidRow(box(title = "Scatter Plot Configuration",
                                  extractScatter_UI("channelDend"),
                                  extractMeasurementColumns_UI("colsDend"),
-                                 actionButton("plotDend", "Select Groups and Plot")
+                                 actionButton("plotDend", "Select Groups and Plot"),
+                             box(title = "Dendrogram Plot", plotOutput(outputId = "dendrogram")
                     )
                     
-                    ),
-                    fluidRow(box(title = "Dendrogram Plot", plotOutput(outputId = "dendrogram"))
                     )
                     
             ),
