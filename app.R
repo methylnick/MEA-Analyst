@@ -198,7 +198,7 @@ ui <- dashboardPage(
                     fluidRow(box(title = "Scatter Plot Configuration",
                                  extractScatter_UI("channelDend"),
                                  extractMeasurementColumns_UI("colsDend"),
-                                 actionButton("plotDend", "Select Groups and Plot"),
+                                 actionButton("plotDend", "Select Groups and Plot")),
                              box(title = "Dendrogram Plot", plotOutput(outputId = "dendrogram")
                     )
                     
@@ -483,7 +483,7 @@ server <- function(input, output, session) {
             select(`Channel ID`:`Dose Label`)
         
         #dat <- t(dat)
-        #colnames(dat) <- metaDat$`Channel ID`
+        #rownames(dat) <- metaDat$`Compound ID`
         
         dat <- dist(dat)
         
