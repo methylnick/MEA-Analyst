@@ -23,7 +23,16 @@ source("helperFunctions.R")
 
 # Define UI for application that draws a histogram
 ui <- dashboardPage(
-    dashboardHeader(title = "MEA Visualiser v3"),
+    dashboardHeader(title = "MEA Visualiser v3",
+                    tags$li(a(href = 'http://shinyapps.company.com',
+                              icon("power-off"),
+                              title = "Back to Apps Home"),
+                            class = "dropdown"),
+                    tags$li(a(href = 'https://www.monash.edu/researchinfrastructure/bioinformatics',
+                              img(src = 'mg.jpeg',
+                                  title = "Company Home", height = "30px"),
+                              style = "padding-top:10px; padding-bottom:10px;"),
+                            class = "dropdown")),
     dashboardSidebar(
         sidebarMenu(
             menuItem(
@@ -615,11 +624,16 @@ server <- function(input, output, session) {
     # have the same name within the normalised uber table. 
     output$stats <- renderPlot({
         dat <- norm.uber.table()
+        coi <- gsub(" ", "_", scatterCols())
+        coi <- gsub("\\[", "", coi)
+        coi <- gsub("\\]", "", coi)
         
         colnames(dat) <- gsub(" ", "_", colnames(dat))
+        colnames(dat) <- gsub("\\[", "", colnames(dat))
+        colnames(dat) <- gsub("\\]", "", colnames(dat))
         
         stat.test <- t_test(data = dat,
-                            formula = as.formula(paste(str_replace((scatterCols()), " ", "_"), "~", "Compound_ID")), 
+                            formula = as.formula(paste(coi, "~", "Compound_ID")), 
                             ref.group = scatterChannel$sampleOrder()[1])
         
         stat.test <- stat.test %>% 
@@ -627,13 +641,16 @@ server <- function(input, output, session) {
             mutate(y.position = y.position * input$stat.y.adj)
         
         
-        ggplot(dat, aes_string(y = str_replace((scatterCols()), " ", "_"), x = "Compound_ID",
+        #ggplot(dat, aes(y = str_replace_all((scatterCols()), " ", "_"), x = "Compound_ID",
+        #col= "Compound_ID"))
+        
+        ggplot(dat, aes_string(y = coi, x = "Compound_ID",
                                col= "Compound_ID")) +
             geom_hline(yintercept = 100, alpha=0.5,linetype=2) +
             geom_beeswarm(priority = c("ascending"),size=input$point.size, alpha=0.5,cex = 0.2) +
             geom_boxplot(alpha = 0.9, show.legend = FALSE,col="black",fill=NA,width=input$box.width,lwd=0.8, outlier.colour = "white") +
             theme_classic() +
-            labs(y=paste0((scatterCols()),"\n% Relative to Baseline\n")) +
+            labs(y=paste0(coi,"\n% Relative to Baseline\n")) +
             theme(
                 axis.text = element_text(size = input$text.size,face = "bold"),
                 axis.title = element_text(size = input$text.size*1.3,face = "bold"),
@@ -668,7 +685,7 @@ server <- function(input, output, session) {
     ############################################################################## 
     output$table_stats <- renderTable({
         dat <- norm.uber.table() 
-        colnames(dat) <- gsub(" ", "_", colnames(dat))
+        colnames(dat) <- str_replace_all(colnames(dat), " ", "_")
         
         stat.columns <- c("group1",	"n1", "estimate1", "group2", "n2", 
                           "estimate2", "estimate", "conf.low", "conf.high","p",	
@@ -676,11 +693,11 @@ server <- function(input, output, session) {
         
         tab.res <-if(input$stats.compare.all==TRUE) {
             t_test(data = dat,
-                   formula = as.formula(paste(str_replace((scatterCols()), " ", "_"), "~",
+                   formula = as.formula(paste(str_replace_all((scatterCols()), " ", "_"), "~",
                                                          "Compound_ID")),
                    conf.level = 0.95,detailed = T)[,stat.columns]
         } else { 
-            t_test(data = dat,formula = as.formula(paste(str_replace((scatterCols()), " ", "_"), "~",
+            t_test(data = dat,formula = as.formula(paste(str_replace_all((scatterCols()), " ", "_"), "~",
                                                          "Compound_ID")), 
                    ref.group = scatterChannel$sampleOrder()[1],conf.level = 0.95,detailed = T)[,stat.columns]
         }
